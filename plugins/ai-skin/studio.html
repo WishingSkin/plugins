@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>AI 皮肤工坊</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fafafa;
+    --panel: #ffffff;
+    --subtle: #f4f4f6;
+    --ink: #18181b;
+    --muted: #52525b;
+    --border: #e4e4e7;
+    --accent: #2563eb;
+    --accent-soft: rgba(37, 99, 235, 0.12);
+    --ok: #15803d;
+    --warn: #b45309;
+    --danger: #b91c1c;
+    --radius: 10px;
+  }
+  :root[data-theme="dark"] {
+    --bg: #111113;
+    --panel: #18181b;
+    --subtle: #202024;
+    --ink: #f4f4f5;
+    --muted: #a1a1aa;
+    --border: #2e2e34;
+    --accent: #60a5fa;
+    --accent-soft: rgba(96, 165, 250, 0.14);
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --danger: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    font: 14px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  .layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.95fr); gap: 16px; align-items: start; }
+  @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: grid;
+    gap: 14px;
+  }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .field { display: grid; gap: 6px; }
+  .field label { font-size: 12px; color: var(--muted); font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 520px) { .grid-2 { grid-template-columns: 1fr; } }
+  textarea, select, input[type="text"], button, a.btn {
+    font: inherit;
+    min-height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--ink);
+    padding: 7px 10px;
+    text-decoration: none;
+  }
+  textarea { min-height: 98px; resize: vertical; line-height: 1.5; }
+  button, a.btn {
+    cursor: pointer;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 150ms ease, background-color 150ms ease;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:hover:not(:disabled), a.btn:hover { border-color: var(--accent); }
+  button:disabled { opacity: 0.55; cursor: not-allowed; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    min-height: 28px;
+    padding: 3px 10px;
+    font-size: 12px;
+    background: var(--subtle);
+    border-radius: 999px;
+  }
+  .meta-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--subtle);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .meta-bar strong { color: var(--ink); font-weight: 600; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+  .preview-box {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    padding: 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--subtle);
+    min-height: 236px;
+  }
+  .preview-box img.doll { width: 96px; height: 192px; image-rendering: pixelated; }
+  .preview-box img.uv { width: 128px; height: 128px; image-rendering: pixelated; border: 1px solid var(--border); background: var(--panel); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .status { font-size: 12px; color: var(--muted); margin: 0; }
+  .status.error { color: var(--danger); }
+  .status.ok { color: var(--ok); }
+  .summary-pill {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    font-size: 12px;
+    color: var(--ink);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    button, a.btn { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="card">
+    <h2>描述你的 Minecraft 角色外观</h2>
+
+    <div id="quota-bar" class="meta-bar">
+      <span>今日配额：<strong id="quota-text">加载中</strong></span>
+      <span>积分费用：<strong id="cost-text">-</strong></span>
+      <span id="balance-wrap" hidden>可用积分：<strong id="balance-text">-</strong></span>
+    </div>
+
+    <div class="field">
+      <label for="prompt-input">角色描述（支持中文与英文，最多 500 字）<span id="char-count">0 / 500</span></label>
+      <textarea id="prompt-input" maxlength="500" placeholder="例如：银色短发蓝瞳少女，穿黑蓝配色赛博风连帽卫衣和深色长裤，戴着蓝色耳机"></textarea>
+    </div>
+
+    <div class="chips" aria-label="灵感预设">
+      <button class="chip" type="button" data-prompt="银发青瞳，黑灰机能风连帽卫衣配发光蓝色耳机">赛博霓虹机能少女</button>
+      <button class="chip" type="button" data-prompt="浅金短发骑士，银白色胸甲搭配金色披肩与深蓝长裤">银白骑士护甲</button>
+      <button class="chip" type="button" data-prompt="墨绿兜帽游侠，深棕风衣外套，温暖琥珀色双眸">森林系兜帽游侠</button>
+      <button class="chip" type="button" data-prompt="黑色猫耳短发少年，红色围巾搭配黑红格纹夹克与运动鞋">街头红黑少年</button>
+    </div>
+
+    <div class="grid-2">
+      <div class="field">
+        <label for="engine-select">生成引擎</label>
+        <select id="engine-select"></select>
+      </div>
+      <div class="field">
+        <label for="style-select">风格倾向</label>
+        <select id="style-select">
+          <option value="auto">智能匹配</option>
+          <option value="anime">日系动漫</option>
+          <option value="cyberpunk">赛博机能</option>
+          <option value="fantasy">奇幻冒险</option>
+          <option value="knight">中世纪骑士</option>
+          <option value="casual">日常潮流</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="field">
+        <label for="model-select">手臂模型</label>
+        <select id="model-select">
+          <option value="default">标准手臂 (Steve 4px)</option>
+          <option value="slim">纤细手臂 (Alex 3px)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <label id="refine-wrap" class="check" hidden>
+          <input id="refine-check" type="checkbox" /> 基于当前方案继续微调
+        </label>
+      </div>
+    </div>
+
+    <p id="engine-hint" class="status"></p>
+
+    <div class="actions">
+      <button id="generate-btn" class="primary" type="button" disabled>开始生成皮肤</button>
+      <span id="job-stage" class="status"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <h2>生成预览与保存</h2>
+      <label class="check" style="font-size:12px;">
+        <input id="show-uv" type="checkbox" /> 显示 64×64 展开图
+      </label>
+    </div>
+
+    <div id="preview-box" class="preview-box">
+      <p class="status">输入描述并点击开始生成后，此处将显示正面与背面效果。</p>
+    </div>
+
+    <div id="recipe-summary" class="summary-pill" hidden></div>
+
+    <div class="field">
+      <label for="save-name">新皮肤名称</label>
+      <input id="save-name" type="text" maxlength="255" placeholder="例如：AI 生成赛博少年" />
+    </div>
+
+    <div class="field">
+      <label for="equip-char">保存后自动穿戴到角色（可选）</label>
+      <select id="equip-char"><option value="">仅保存到我的材质</option></select>
+    </div>
+
+    <label id="public-wrap" class="check" hidden>
+      <input id="save-public" type="checkbox" /> 公开这份 AI 生成皮肤
+    </label>
+
+    <div class="actions">
+      <a id="download-link" class="btn" hidden download="ai-skin.png">下载 PNG</a>
+      <button id="save-btn" class="primary" type="button" disabled>保存到我的材质</button>
+    </div>
+    <p id="save-status" class="status"></p>
+  </div>
+</div>
+
+<script>
+(() => {
+  const reqMap = new Map();
+  const hostMap = new Map();
+  let seq = 0;
+
+  let configState = null;
+  let currentJob = null;
+  let pollTimer = null;
+
+  window.addEventListener('message', (event) => {
+    const msg = event.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'wishingskin:context' && msg.context) {
+      document.documentElement.dataset.theme = msg.context.theme === 'dark' ? 'dark' : 'light';
+      return;
+    }
+    if (msg.type === 'wishingskin:response' && reqMap.has(msg.id)) {
+      const h = reqMap.get(msg.id); reqMap.delete(msg.id); clearTimeout(h.t);
+      h.resolve({ status: msg.status, body: msg.body });
+    }
+    if (msg.type === 'wishingskin:host-response' && hostMap.has(msg.id)) {
+      const h = hostMap.get(msg.id); hostMap.delete(msg.id); clearTimeout(h.t);
+      h.resolve(msg);
+    }
+  });
+
+  function callPlugin(method, path, body) {
+    const id = 'ai-' + (++seq);
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, 20000);
+      reqMap.set(id, { resolve, reject, t });
+      window.parent.postMessage({ type: 'wishingskin:request', id, method, path, body }, '*');
+    });
+  }
+
+  function callHost(action, payload) {
+    const id = 'aih-' + (++seq);
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { hostMap.delete(id); reject(new Error('宿主响应超时')); }, 15000);
+      hostMap.set(id, { resolve, reject, t });
+      window.parent.postMessage({ type: 'wishingskin:host', id, action, payload }, '*');
+    });
+  }
+
+  function updateEngineHint() {
+    if (!configState || !Array.isArray(configState.engines)) return;
+    const val = document.getElementById('engine-select').value;
+    const eng = configState.engines.find(e => e.id === val);
+    document.getElementById('engine-hint').textContent = eng ? eng.hint : '';
+    const canRefine = Boolean(currentJob && currentJob.recipe && (val === 'structured_llm' || val === 'local_demo'));
+    document.getElementById('refine-wrap').hidden = !canRefine;
+    if (!canRefine) {
+      document.getElementById('refine-check').checked = false;
+    }
+  }
+
+  function renderJobPreview() {
+    const box = document.getElementById('preview-box');
+    const summaryEl = document.getElementById('recipe-summary');
+    const dlLink = document.getElementById('download-link');
+    const saveBtn = document.getElementById('save-btn');
+
+    if (!currentJob || currentJob.status !== 'succeeded' || !currentJob.pngBase64) {
+      box.innerHTML = '<p class="status">输入描述并点击开始生成后，此处将显示正面与背面效果。</p>';
+      summaryEl.hidden = true;
+      dlLink.hidden = true;
+      saveBtn.disabled = true;
+      return;
+    }
+
+    box.innerHTML = '';
+    const fImg = document.createElement('img');
+    fImg.className = 'doll';
+    fImg.src = 'data:image/png;base64,' + currentJob.frontPreviewBase64;
+    fImg.alt = '正面预览';
+    const bImg = document.createElement('img');
+    bImg.className = 'doll';
+    bImg.src = 'data:image/png;base64,' + currentJob.backPreviewBase64;
+    bImg.alt = '背面预览';
+    box.append(fImg, bImg);
+
+    if (document.getElementById('show-uv').checked) {
+      const uvImg = document.createElement('img');
+      uvImg.className = 'uv';
+      uvImg.src = 'data:image/png;base64,' + currentJob.pngBase64;
+      uvImg.alt = '64×64 UV 展开图';
+      box.appendChild(uvImg);
+    }
+
+    if (currentJob.summary) {
+      summaryEl.hidden = false;
+      summaryEl.textContent = currentJob.summary;
+    } else {
+      summaryEl.hidden = true;
+    }
+
+    dlLink.href = 'data:image/png;base64,' + currentJob.pngBase64;
+    dlLink.hidden = false;
+    saveBtn.disabled = false;
+
+    const nameInput = document.getElementById('save-name');
+    if (!nameInput.value.trim()) {
+      nameInput.value = (currentJob.summary || 'AI 皮肤').slice(0, 48);
+    }
+    updateEngineHint();
+  }
+
+  function applyConfigUI() {
+    if (!configState) return;
+    document.getElementById('quota-text').textContent = (configState.usedToday || 0) + ' / ' + (configState.dailyLimit || 0);
+    document.getElementById('cost-text').textContent = configState.pointsCost > 0 ? configState.pointsCost + ' 积分' : '免费';
+    const balWrap = document.getElementById('balance-wrap');
+    if (configState.pointsEnabled && configState.balance !== '') {
+      balWrap.hidden = false;
+      document.getElementById('balance-text').textContent = configState.balance;
+    } else {
+      balWrap.hidden = true;
+    }
+    document.getElementById('public-wrap').hidden = !configState.allowPublicSave;
+
+    const engSel = document.getElementById('engine-select');
+    const prev = engSel.value;
+    engSel.innerHTML = '';
+    const configured = (configState.engines || []).filter(e => e.configured);
+    if (configured.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '管理员尚未配置任何 AI 引擎';
+      engSel.appendChild(opt);
+      document.getElementById('generate-btn').disabled = true;
+    } else {
+      for (const e of configured) {
+        const opt = document.createElement('option');
+        opt.value = e.id;
+        opt.textContent = e.label;
+        engSel.appendChild(opt);
+      }
+      if (prev && configured.some(e => e.id === prev)) {
+        engSel.value = prev;
+      } else if (configState.defaultEngine) {
+        engSel.value = configState.defaultEngine;
+      }
+      document.getElementById('generate-btn').disabled = false;
+    }
+    updateEngineHint();
+  }
+
+  async function refreshConfig() {
+    const res = await callPlugin('GET', '/config');
+    if (res.status === 200) {
+      configState = res.body;
+      applyConfigUI();
+      if (configState.activeJobId && !pollTimer) {
+        pollJob(configState.activeJobId);
+      }
+    }
+  }
+
+  function setBusy(busy, stageText, isError) {
+    const btn = document.getElementById('generate-btn');
+    const stage = document.getElementById('job-stage');
+    btn.disabled = busy || !document.getElementById('engine-select').value;
+    stage.textContent = stageText || '';
+    stage.className = 'status' + (isError ? ' error' : '');
+  }
+
+  function pollJob(jobId) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+    setBusy(true, '正在生成并校验皮肤…', false);
+
+    const step = async () => {
+      try {
+        const res = await callPlugin('GET', '/jobs?id=' + encodeURIComponent(jobId));
+        if (res.status !== 200) {
+          setBusy(false, (res.body && res.body.error) || '查询任务失败', true);
+          return;
+        }
+        const job = res.body;
+        if (job.status === 'queued' || job.status === 'running') {
+          setBusy(true, job.stage || '正在处理中…', false);
+          pollTimer = setTimeout(step, 1200);
+          return;
+        }
+        if (job.status === 'succeeded') {
+          currentJob = job;
+          setBusy(false, '生成完成' + (job.durationMs ? '（' + (job.durationMs / 1000).toFixed(1) + ' 秒）' : ''), false);
+          renderJobPreview();
+          void refreshConfig();
+          return;
+        }
+        setBusy(false, job.error || '生成失败', true);
+        void refreshConfig();
+      } catch (err) {
+        setBusy(false, (err && err.message) || '查询任务超时', true);
+      }
+    };
+    void step();
+  }
+
+  document.getElementById('prompt-input').addEventListener('input', (e) => {
+    document.getElementById('char-count').textContent = e.target.value.length + ' / 500';
+  });
+
+  document.querySelectorAll('.chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const area = document.getElementById('prompt-input');
+      area.value = btn.getAttribute('data-prompt') || '';
+      document.getElementById('char-count').textContent = area.value.length + ' / 500';
+      area.focus();
+    });
+  });
+
+  document.getElementById('engine-select').addEventListener('change', updateEngineHint);
+  document.getElementById('show-uv').addEventListener('change', renderJobPreview);
+
+  document.getElementById('generate-btn').addEventListener('click', async () => {
+    const prompt = document.getElementById('prompt-input').value.trim();
+    if (!prompt) {
+      setBusy(false, '请先输入皮肤描述文字', true);
+      return;
+    }
+    const engine = document.getElementById('engine-select').value;
+    const payload = {
+      prompt,
+      engine,
+      style: document.getElementById('style-select').value,
+      model: document.getElementById('model-select').value
+    };
+    if (document.getElementById('refine-check').checked && currentJob && currentJob.recipe) {
+      payload.baseRecipe = currentJob.recipe;
+    }
+    document.getElementById('save-status').textContent = '';
+    setBusy(true, '正在提交任务…', false);
+    try {
+      const res = await callPlugin('POST', '/generate', payload);
+      if (res.status !== 202) {
+        const msg = (res.body && res.body.error) || '提交生成失败';
+        setBusy(false, msg, true);
+        void callHost('notify', { message: msg, kind: 'error' });
+        return;
+      }
+      pollJob(res.body.jobId);
+    } catch (err) {
+      setBusy(false, (err && err.message) || '提交请求失败', true);
+    }
+  });
+
+  document.getElementById('save-btn').addEventListener('click', async () => {
+    if (!currentJob || currentJob.status !== 'succeeded') return;
+    const btn = document.getElementById('save-btn');
+    const note = document.getElementById('save-status');
+    btn.disabled = true;
+    note.textContent = '正在上传保存到我的材质…';
+    note.className = 'status';
+    try {
+      const res = await callPlugin('POST', '/save', {
+        jobId: currentJob.jobId,
+        name: document.getElementById('save-name').value.trim() || 'AI 生成皮肤',
+        model: document.getElementById('model-select').value,
+        isPublic: document.getElementById('save-public').checked,
+        characterId: Number(document.getElementById('equip-char').value) || 0
+      });
+      if (res.status !== 200) {
+        note.textContent = (res.body && res.body.error) || '保存失败';
+        note.className = 'status error';
+        void callHost('notify', { message: note.textContent, kind: 'error' });
+        return;
+      }
+      const msg = res.body.pendingReview
+        ? '皮肤已保存，等待站点审核通过后方可穿戴。'
+        : res.body.bound
+          ? '新皮肤已保存到材质库并穿戴到角色。'
+          : '新皮肤已保存到我的材质。';
+      note.textContent = msg;
+      note.className = 'status ok';
+      void callHost('notify', { message: msg, kind: 'success' });
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  async function init() {
+    const [, charRes] = await Promise.all([
+      refreshConfig(),
+      callHost('listCharacters', {})
+    ]);
+    const cSel = document.getElementById('equip-char');
+    const chars = (charRes.ok && charRes.data && charRes.data.characters) ? charRes.data.characters : [];
+    for (const c of chars) {
+      const opt = document.createElement('option');
+      opt.value = String(c.id);
+      opt.textContent = c.name;
+      cSel.appendChild(opt);
+    }
+  }
+
+  void init();
+})();
+</script>
+</body>
+</html>

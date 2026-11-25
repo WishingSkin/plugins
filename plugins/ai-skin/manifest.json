@@ -1,0 +1,60 @@
+{
+  "manifest": {
+    "id": "wishingskin.ai-skin",
+    "name": "AI 皮肤工坊",
+    "description": "通过自然语言描述生成标准 64×64 Minecraft 皮肤，支持纯文本 LLM 配方合成、图像 API 及外部算力节点，含 UV 清洗、配额与积分控制。",
+    "version": "0.1.0",
+    "settingsNamespace": "wishingskin.ai-skin",
+    "migrationVersion": 0,
+    "permissions": [
+      "routes.user",
+      "routes.admin",
+      "frontend",
+      "user.frontend",
+      "database",
+      "host.public.read",
+      "host.users.read",
+      "host.textures.write",
+      "host.characters.write",
+      "host.points.spend"
+    ],
+    "settings": [
+      { "key": "default_engine", "label": "默认生成引擎（structured_llm / image_api / async_worker / local_demo）", "type": "text" },
+      { "key": "llm_api_url", "label": "文本模型 Chat API 地址（OpenAI 兼容，例如 https://api.openai.com/v1/chat/completions）", "type": "text" },
+      { "key": "llm_api_key", "label": "文本模型 API Key", "type": "secret" },
+      { "key": "llm_model", "label": "文本模型名称（留空默认 gpt-4o-mini）", "type": "text" },
+      { "key": "image_api_url", "label": "图像模型 API 地址（OpenAI Images 兼容，可选）", "type": "text" },
+      { "key": "image_api_key", "label": "图像模型 API Key", "type": "secret" },
+      { "key": "image_model", "label": "图像模型名称（留空默认 gpt-image-1）", "type": "text" },
+      { "key": "worker_url", "label": "外部自定义推理节点 URL（支持同步 PNG 或异步任务轮询，可选）", "type": "text" },
+      { "key": "worker_secret", "label": "外部推理节点鉴权密钥（Bearer Token，可选）", "type": "secret" },
+      { "key": "allow_private_worker", "label": "允许连接内网或局域网推理节点 IP（默认仅允许公网 HTTPS 或本机回环）", "type": "boolean" },
+      { "key": "allow_local_fallback", "label": "启用内置免密钥本地演示引擎（仅关键词配色合成，供无外部 API 时体验）", "type": "boolean" },
+      { "key": "points_cost", "label": "每次生成消耗积分（0 为免费；生成成功且校验通过后再扣费）", "type": "number" },
+      { "key": "daily_limit", "label": "每名用户每日成功生成上限（默认 5，0 表示仅管理员可用）", "type": "number" },
+      { "key": "cooldown_seconds", "label": "同一用户两次提交冷却秒数（默认 15）", "type": "number" },
+      { "key": "allow_public_save", "label": "允许用户将 AI 生成的皮肤直接设为公开", "type": "boolean" },
+      { "key": "timeout_seconds", "label": "单次 AI 任务超时秒数（默认 60，范围 10–180）", "type": "number" }
+    ]
+  },
+  "protocol": 2,
+  "routes": [
+    { "method": "GET", "path": "/config", "access": "user" },
+    { "method": "POST", "path": "/generate", "access": "user" },
+    { "method": "GET", "path": "/jobs", "access": "user" },
+    { "method": "POST", "path": "/save", "access": "user" },
+    { "method": "GET", "path": "/admin/status", "access": "admin" },
+    { "method": "POST", "path": "/admin/test", "access": "admin" },
+    { "method": "POST", "path": "/admin/clear-logs", "access": "admin" }
+  ],
+  "frontend": "admin.html",
+  "userFrontends": [
+    {
+      "id": "studio",
+      "label": "AI 皮肤工坊",
+      "description": "输入文字描述即可生成标准 64×64 Minecraft 皮肤，支持局部微调、预览、保存与角色穿戴。",
+      "slot": "user.tools",
+      "path": "studio.html"
+    }
+  ]
+}
