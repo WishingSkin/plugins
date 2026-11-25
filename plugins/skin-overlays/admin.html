@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>装扮叠层管理</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fafafa;
+    --panel: #ffffff;
+    --subtle: #f4f4f6;
+    --ink: #18181b;
+    --muted: #52525b;
+    --border: #e4e4e7;
+    --accent: #2563eb;
+    --danger: #b91c1c;
+    --radius: 10px;
+  }
+  :root[data-theme="dark"] {
+    --bg: #111113;
+    --panel: #18181b;
+    --subtle: #202024;
+    --ink: #f4f4f5;
+    --muted: #a1a1aa;
+    --border: #2e2e34;
+    --accent: #60a5fa;
+    --danger: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; font: 14px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  .stack { display: grid; gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: grid; gap: 12px; }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .list { display: grid; gap: 10px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--subtle); }
+  .row img { width: 32px; height: 64px; image-rendering: pixelated; }
+  .row-meta { flex: 1; min-width: 140px; display: grid; gap: 2px; }
+  .row-meta span { font-size: 12px; color: var(--muted); }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; align-items: end; }
+  label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  input, button { font: inherit; min-height: 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); padding: 6px 10px; }
+  button { cursor: pointer; font-weight: 500; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--danger); border-color: var(--danger); }
+  .msg { font-size: 12px; color: var(--muted); margin: 0; }
+</style>
+</head>
+<body>
+<div class="stack">
+  <section class="card">
+    <h2>内置装扮预设</h2>
+    <div id="presets" class="list"></div>
+  </section>
+
+  <section class="card">
+    <h2>上传自定义透明叠层</h2>
+    <form id="add-form" class="form-grid">
+      <label>装饰名称<input id="c-name" type="text" maxlength="64" required placeholder="例如：新年春联" /></label>
+      <label>分类标签<input id="c-cat" type="text" maxlength="32" value="自定义" /></label>
+      <label>64×64 或 128×128 PNG（&le; 32 KiB）<input id="c-file" type="file" accept="image/png" required /></label>
+      <button id="add-btn" class="primary" type="submit">添加叠层</button>
+    </form>
+    <p id="form-msg" class="msg"></p>
+    <div id="custom" class="list"></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const reqMap = new Map();
+  let seq = 0;
+
+  window.addEventListener('message', (event) => {
+    const msg = event.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'wishingskin:context' && msg.context) {
+      document.documentElement.dataset.theme = msg.context.theme === 'dark' ? 'dark' : 'light';
+      return;
+    }
+    if (msg.type === 'wishingskin:response' && reqMap.has(msg.id)) {
+      const h = reqMap.get(msg.id); reqMap.delete(msg.id); clearTimeout(h.t);
+      h.resolve({ status: msg.status, body: msg.body });
+    }
+  });
+
+  function callPlugin(method, path, body) {
+    const id = 'adm-' + (++seq);
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, 10000);
+      reqMap.set(id, { resolve, reject, t });
+      window.parent.postMessage({ type: 'wishingskin:request', id, method, path, body }, '*');
+    });
+  }
+
+  async function refresh() {
+    const res = await callPlugin('GET', '/admin/overlays');
+    if (res.status !== 200) return;
+
+    const presetsEl = document.getElementById('presets');
+    presetsEl.innerHTML = '';
+    for (const p of res.body.presets || []) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const img = document.createElement('img'); img.src = p.previewDataUrl; img.alt = p.name;
+      const meta = document.createElement('div'); meta.className = 'row-meta';
+      const strong = document.createElement('strong'); strong.textContent = p.name;
+      const span = document.createElement('span'); span.textContent = p.category + ' / ' + (p.enabled ? '已启用' : '已停用');
+      meta.append(strong, span);
+      const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = p.enabled ? '停用' : '启用';
+      btn.addEventListener('click', async () => {
+        await callPlugin('POST', '/admin/overlays', { action: 'toggle', id: p.id, enabled: !p.enabled });
+        await refresh();
+      });
+      row.append(img, meta, btn);
+      presetsEl.appendChild(row);
+    }
+
+    const customEl = document.getElementById('custom');
+    customEl.innerHTML = '';
+    for (const c of res.body.custom || []) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const img = document.createElement('img'); img.src = c.previewDataUrl; img.alt = c.name;
+      const meta = document.createElement('div'); meta.className = 'row-meta';
+      const strong = document.createElement('strong'); strong.textContent = c.name;
+      const span = document.createElement('span'); span.textContent = c.category;
+      meta.append(strong, span);
+      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'danger'; btn.textContent = '删除';
+      btn.addEventListener('click', async () => {
+        await callPlugin('POST', '/admin/overlays/delete', { id: c.id });
+        await refresh();
+      });
+      row.append(img, meta, btn);
+      customEl.appendChild(row);
+    }
+  }
+
+  document.getElementById('add-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const file = document.getElementById('c-file').files[0];
+    const msgEl = document.getElementById('form-msg');
+    if (!file) return;
+    if (file.size > 32 * 1024) { msgEl.textContent = '文件体积不能超过 32 KiB。'; return; }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const res = await callPlugin('POST', '/admin/overlays', {
+        name: document.getElementById('c-name').value.trim(),
+        category: document.getElementById('c-cat').value.trim(),
+        pngBase64: reader.result
+      });
+      if (res.status !== 200) {
+        msgEl.textContent = (res.body && res.body.error) || '添加失败';
+        return;
+      }
+      msgEl.textContent = '已添加自定义叠层。';
+      document.getElementById('add-form').reset();
+      await refresh();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  void refresh();
+})();
+</script>
+</body>
+</html>

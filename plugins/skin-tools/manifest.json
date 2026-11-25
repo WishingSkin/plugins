@@ -1,0 +1,33 @@
+{
+  "manifest": {
+    "id": "wishingskin.skin-tools",
+    "name": "皮肤格式与调色工具",
+    "description": "提供 64×32 旧版皮肤升级、Steve/Alex 手臂转换、HSL 调色与透明杂点清理工具。",
+    "version": "0.1.0",
+    "settingsNamespace": "wishingskin.skin-tools",
+    "migrationVersion": 0,
+    "permissions": ["routes.user", "user.frontend", "host.textures.read"],
+    "settings": []
+  },
+  "protocol": 2,
+  "routes": [
+    { "method": "POST", "path": "/transform", "access": "user" }
+  ],
+  "userFrontends": [
+    {
+      "id": "workbench",
+      "label": "皮肤实用工具箱",
+      "description": "支持 64×32 升级 64×64、Steve/Alex 手臂转换、调色与杂点清理。",
+      "slot": "user.tools",
+      "path": "workbench.html"
+    },
+    {
+      "id": "edit-tools",
+      "label": "格式转换与调色",
+      "description": "快速转换手臂模型、升级尺寸或调整当前皮肤色调。",
+      "slot": "texture.action",
+      "path": "workbench.html",
+      "kinds": ["skin"]
+    }
+  ]
+}

@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>皮肤装扮叠层工作台</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fafafa;
+    --panel: #ffffff;
+    --subtle: #f4f4f6;
+    --ink: #18181b;
+    --muted: #52525b;
+    --border: #e4e4e7;
+    --accent: #2563eb;
+    --accent-soft: rgba(37, 99, 235, 0.12);
+    --radius: 10px;
+  }
+  :root[data-theme="dark"] {
+    --bg: #111113;
+    --panel: #18181b;
+    --subtle: #202024;
+    --ink: #f4f4f5;
+    --muted: #a1a1aa;
+    --border: #2e2e34;
+    --accent: #60a5fa;
+    --accent-soft: rgba(96, 165, 250, 0.14);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; font: 14px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  .layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(290px, 0.9fr); gap: 16px; align-items: start; }
+  @media (max-width: 780px) { .layout { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: grid; gap: 14px; }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  h3 { margin: 0; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .field { display: grid; gap: 6px; }
+  .field label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  select, input[type="text"], button {
+    font: inherit; min-height: 36px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--ink); padding: 6px 10px;
+  }
+  button { cursor: pointer; font-weight: 500; transition: border-color 150ms ease; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: 0.55; cursor: not-allowed; }
+  .overlay-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; }
+  .overlay-card {
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--subtle);
+    display: grid; gap: 6px; justify-items: center; text-align: center; cursor: pointer;
+  }
+  .overlay-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+  .overlay-card img { width: 48px; height: 96px; image-rendering: pixelated; }
+  .overlay-card strong { font-size: 12px; }
+  .overlay-card span { font-size: 11px; color: var(--muted); }
+  .preview-box {
+    display: flex; justify-content: center; gap: 20px; padding: 18px;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--subtle); min-height: 224px; align-items: center;
+  }
+  .preview-box img { width: 96px; height: 192px; image-rendering: pixelated; }
+  .checks { display: grid; gap: 8px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+  .status { font-size: 12px; color: var(--muted); margin: 0; }
+  .range-row { display: flex; align-items: center; gap: 10px; }
+  .range-row input { flex: 1; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="card">
+    <div class="field">
+      <label for="base-skin">选择基础皮肤</label>
+      <select id="base-skin"></select>
+    </div>
+
+    <div class="checks">
+      <label class="check"><input id="opt-upgrade" type="checkbox" checked /> 自动将 64×32 旧版皮肤升级为 64×64</label>
+      <label class="check"><input id="opt-clear-hat" type="checkbox" /> 清除原有头饰外层后再叠加</label>
+    </div>
+
+    <div class="field">
+      <label>选择装饰叠层（<span id="layer-hint">最多 3 层</span>）</label>
+      <div id="overlay-grid" class="overlay-grid"></div>
+    </div>
+
+    <div class="field">
+      <label for="opt-opacity">装饰不透明度：<span id="opacity-val">100%</span></label>
+      <div class="range-row"><input id="opt-opacity" type="range" min="20" max="100" value="100" /></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>实时合成预览</h2>
+    <div id="preview-box" class="preview-box">
+      <p class="status">选择皮肤和至少一层装扮即可预览。</p>
+    </div>
+
+    <div class="field">
+      <label for="save-name">新皮肤名称</label>
+      <input id="save-name" type="text" maxlength="255" placeholder="例如：圣诞节日皮肤" />
+    </div>
+
+    <div class="field">
+      <label for="save-model">手臂模型</label>
+      <select id="save-model">
+        <option value="default">标准手臂 (Steve)</option>
+        <option value="slim">纤细手臂 (Alex)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="equip-char">保存后自动穿戴到角色（可选）</label>
+      <select id="equip-char"><option value="">仅保存到我的材质</option></select>
+    </div>
+
+    <label id="public-wrap" class="check" hidden><input id="save-public" type="checkbox" /> 公开这份新合成皮肤</label>
+    <p id="fee-note" class="status" hidden></p>
+    <button id="apply-btn" class="primary" type="button" disabled>生成并保存</button>
+    <p id="result-note" class="status"></p>
+  </div>
+</div>
+
+<script>
+(() => {
+  const reqMap = new Map();
+  const hostMap = new Map();
+  let seq = 0;
+
+  let skins = [];
+  let characters = [];
+  let overlays = [];
+  let selectedLayers = [];
+  let maxLayers = 3;
+  let pointsCost = 0;
+  let preselectedTexture = null;
+
+  window.addEventListener('message', (event) => {
+    const msg = event.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'wishingskin:context' && msg.context) {
+      document.documentElement.dataset.theme = msg.context.theme === 'dark' ? 'dark' : 'light';
+      if (msg.context.texture && msg.context.texture.fileHash) {
+        preselectedTexture = msg.context.texture;
+        applyContextTexture();
+      }
+      return;
+    }
+    if (msg.type === 'wishingskin:response' && reqMap.has(msg.id)) {
+      const h = reqMap.get(msg.id); reqMap.delete(msg.id); clearTimeout(h.t);
+      h.resolve({ status: msg.status, body: msg.body });
+    }
+    if (msg.type === 'wishingskin:host-response' && hostMap.has(msg.id)) {
+      const h = hostMap.get(msg.id); hostMap.delete(msg.id); clearTimeout(h.t);
+      h.resolve(msg);
+    }
+  });
+
+  function callPlugin(method, path, body) {
+    const id = 'ov-' + (++seq);
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, 15000);
+      reqMap.set(id, { resolve, reject, t });
+      window.parent.postMessage({ type: 'wishingskin:request', id, method, path, body }, '*');
+    });
+  }
+
+  function callHost(action, payload) {
+    const id = 'ovh-' + (++seq);
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { hostMap.delete(id); reject(new Error('宿主响应超时')); }, 15000);
+      hostMap.set(id, { resolve, reject, t });
+      window.parent.postMessage({ type: 'wishingskin:host', id, action, payload }, '*');
+    });
+  }
+
+  function applyContextTexture() {
+    if (!preselectedTexture) return;
+    const sel = document.getElementById('base-skin');
+    if (Array.from(sel.options).some(o => o.value === preselectedTexture.fileHash)) {
+      sel.value = preselectedTexture.fileHash;
+    }
+    document.getElementById('save-model').value = preselectedTexture.model === 'slim' ? 'slim' : 'default';
+    if (!document.getElementById('save-name').value) {
+      document.getElementById('save-name').value = (preselectedTexture.name || '我的皮肤') + ' 装扮版';
+    }
+    void refreshPreview();
+  }
+
+  function renderOverlays() {
+    const grid = document.getElementById('overlay-grid');
+    grid.innerHTML = '';
+    for (const ov of overlays) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const idx = selectedLayers.indexOf(ov.id);
+      btn.className = 'overlay-card' + (idx >= 0 ? ' selected' : '');
+      const img = document.createElement('img');
+      if (ov.previewDataUrl) img.src = ov.previewDataUrl;
+      img.alt = ov.name;
+      const title = document.createElement('strong');
+      title.textContent = idx >= 0 ? '#' + (idx + 1) + ' ' + ov.name : ov.name;
+      const cat = document.createElement('span');
+      cat.textContent = ov.category || '装饰';
+      btn.append(img, title, cat);
+      btn.addEventListener('click', () => {
+        const pos = selectedLayers.indexOf(ov.id);
+        if (pos >= 0) selectedLayers.splice(pos, 1);
+        else if (selectedLayers.length < maxLayers) selectedLayers.push(ov.id);
+        else { void callHost('notify', { message: '单次最多选择 ' + maxLayers + ' 层装扮', kind: 'error' }); return; }
+        renderOverlays();
+        void refreshPreview();
+      });
+      grid.appendChild(btn);
+    }
+  }
+
+  async function refreshPreview() {
+    const fileHash = document.getElementById('base-skin').value;
+    const box = document.getElementById('preview-box');
+    const applyBtn = document.getElementById('apply-btn');
+    if (!fileHash || selectedLayers.length === 0) {
+      box.innerHTML = '<p class="status">选择皮肤和至少一层装扮即可预览。</p>';
+      applyBtn.disabled = true;
+      return;
+    }
+    const op = Number(document.getElementById('opt-opacity').value) / 100;
+    const res = await callPlugin('POST', '/preview', {
+      fileHash,
+      model: document.getElementById('save-model').value,
+      upgradeLegacy: document.getElementById('opt-upgrade').checked,
+      clearHat: document.getElementById('opt-clear-hat').checked,
+      layers: selectedLayers.map(id => ({ id, opacity: op }))
+    });
+    if (res.status !== 200) {
+      box.innerHTML = '';
+      const p = document.createElement('p');
+      p.className = 'status';
+      p.textContent = (res.body && res.body.error) || '无法生成预览';
+      box.appendChild(p);
+      applyBtn.disabled = true;
+      return;
+    }
+    box.innerHTML = '';
+    const fImg = document.createElement('img');
+    fImg.src = 'data:image/png;base64,' + res.body.frontPreviewBase64;
+    fImg.alt = '正面预览';
+    const bImg = document.createElement('img');
+    bImg.src = 'data:image/png;base64,' + res.body.backPreviewBase64;
+    bImg.alt = '背面预览';
+    box.append(fImg, bImg);
+    applyBtn.disabled = false;
+  }
+
+  async function init() {
+    const [ovRes, texRes, charRes] = await Promise.all([
+      callPlugin('GET', '/overlays'),
+      callHost('listTextures', { kind: 'skin', pageSize: 100 }),
+      callHost('listCharacters', {})
+    ]);
+    if (ovRes.status === 200) {
+      overlays = ovRes.body.overlays || [];
+      maxLayers = ovRes.body.maxLayers || 3;
+      pointsCost = ovRes.body.pointsCost || 0;
+      document.getElementById('layer-hint').textContent = '最多 ' + maxLayers + ' 层';
+      document.getElementById('public-wrap').hidden = !ovRes.body.allowPublicSave;
+      if (pointsCost > 0) {
+        const fee = document.getElementById('fee-note');
+        fee.hidden = false;
+        fee.textContent = '保存合成皮肤将扣除 ' + pointsCost + ' 积分。';
+      }
+      renderOverlays();
+    }
+    const sel = document.getElementById('base-skin');
+    sel.innerHTML = '';
+    skins = (texRes.ok && texRes.data && texRes.data.textures) ? texRes.data.textures.filter(x => !x.reviewState || x.reviewState === 'approved') : [];
+    for (const s of skins) {
+      const opt = document.createElement('option');
+      opt.value = s.fileHash;
+      opt.textContent = s.name + (s.model === 'slim' ? ' (Alex)' : ' (Steve)');
+      sel.appendChild(opt);
+    }
+    if (skins.length && !document.getElementById('save-name').value) {
+      document.getElementById('save-name').value = skins[0].name + ' 装扮版';
+    }
+
+    const cSel = document.getElementById('equip-char');
+    characters = (charRes.ok && charRes.data && charRes.data.characters) ? charRes.data.characters : [];
+    for (const c of characters) {
+      const opt = document.createElement('option');
+      opt.value = String(c.id);
+      opt.textContent = c.name;
+      cSel.appendChild(opt);
+    }
+    applyContextTexture();
+  }
+
+  document.getElementById('opt-opacity').addEventListener('input', (e) => {
+    document.getElementById('opacity-val').textContent = e.target.value + '%';
+  });
+  for (const id of ['base-skin', 'opt-upgrade', 'opt-clear-hat', 'opt-opacity', 'save-model']) {
+    document.getElementById(id).addEventListener('change', () => void refreshPreview());
+  }
+
+  document.getElementById('apply-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('apply-btn');
+    const note = document.getElementById('result-note');
+    btn.disabled = true;
+    note.textContent = '正在合成并上传皮肤…';
+    try {
+      const op = Number(document.getElementById('opt-opacity').value) / 100;
+      const charID = Number(document.getElementById('equip-char').value) || 0;
+      const res = await callPlugin('POST', '/apply', {
+        fileHash: document.getElementById('base-skin').value,
+        name: document.getElementById('save-name').value.trim() || '装扮合成皮肤',
+        model: document.getElementById('save-model').value,
+        isPublic: document.getElementById('save-public').checked,
+        characterId: charID,
+        upgradeLegacy: document.getElementById('opt-upgrade').checked,
+        clearHat: document.getElementById('opt-clear-hat').checked,
+        layers: selectedLayers.map(id => ({ id, opacity: op })),
+        requestId: 'ov-' + Date.now()
+      });
+      if (res.status !== 200) {
+        note.textContent = (res.body && res.body.error) || '保存失败';
+        void callHost('notify', { message: note.textContent, kind: 'error' });
+        return;
+      }
+      const msg = res.body.pendingReview
+        ? '皮肤已保存，正等待站点内容审核通过后方可穿戴。'
+        : res.body.bound
+          ? '新皮肤已保存并穿戴到指定角色。'
+          : '新皮肤已保存到我的材质。';
+      note.textContent = msg + (res.body.balance ? ' 当前余额：' + res.body.balance + ' 积分。' : '');
+      void callHost('notify', { message: msg, kind: 'success' });
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  void init();
+})();
+</script>
+</body>
+</html>
