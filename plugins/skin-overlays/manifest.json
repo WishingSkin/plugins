@@ -2,7 +2,7 @@
   "manifest": {
     "id": "wishingskin.skin-overlays",
     "name": "皮肤装扮叠层",
-    "description": "在保留原有皮肤的前提下叠加节日帽饰、王冠、护目镜或围巾等透明装饰层，一键合成并穿戴。",
+    "description": "在保留原有皮肤的前提下叠加冬日红围巾示例或管理员上传的透明装饰层，一键合成并穿戴。",
     "version": "0.1.0",
     "settingsNamespace": "wishingskin.skin-overlays",
     "migrationVersion": 0,
@@ -18,9 +18,26 @@
       "host.points.spend"
     ],
     "settings": [
-      { "key": "points_cost", "label": "每次合成消耗积分（0 为免费，需启用积分插件）", "type": "number" },
-      { "key": "max_layers", "label": "单次最多叠加层数（默认 3，范围 1–5）", "type": "number" },
-      { "key": "allow_public_save", "label": "允许用户将合成后的皮肤直接设为公开", "type": "boolean" }
+      {
+        "key": "points_cost",
+        "label": "每次合成消耗积分",
+        "type": "number",
+        "default": 0,
+        "description": "0 为免费，需启用站点积分插件"
+      },
+      {
+        "key": "max_layers",
+        "label": "单次最多叠加层数",
+        "type": "number",
+        "default": 3,
+        "description": "范围 1 至 5 层"
+      },
+      {
+        "key": "allow_public_save",
+        "label": "允许用户将合成后的皮肤直接设为公开",
+        "type": "boolean",
+        "default": false
+      }
     ]
   },
   "protocol": 2,
@@ -37,14 +54,14 @@
     {
       "id": "studio",
       "label": "皮肤装扮叠层",
-      "description": "为现有皮肤叠加节日帽饰、王冠、护目镜或围巾，一键预览、保存与穿戴。",
+      "description": "为现有皮肤叠加冬日红围巾示例或自定义透明装饰层，一键预览、保存与穿戴。",
       "slot": "user.tools",
       "path": "studio.html"
     },
     {
       "id": "decorate",
       "label": "叠加装饰层",
-      "description": "给当前皮肤叠加节日或个性化透明装饰层。",
+      "description": "给当前皮肤叠加透明装饰层。",
       "slot": "texture.action",
       "path": "studio.html",
       "kinds": ["skin"]

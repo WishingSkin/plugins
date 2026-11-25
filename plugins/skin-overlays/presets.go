@@ -25,11 +25,6 @@ func buildBuiltinPresets() []presetOverlay {
 		category string
 		build    func() *image.NRGBA
 	}{
-		{"santa_hat", "圣诞帽", "节日", makeSantaHat},
-		{"pumpkin_band", "万圣节南瓜发箍", "节日", makePumpkinBand},
-		{"golden_crown", "黄金王冠", "头饰", makeGoldenCrown},
-		{"cat_ears", "猫耳发箍", "头饰", makeCatEars},
-		{"cyber_visor", "赛博护目镜", "面部", makeCyberVisor},
 		{"winter_scarf", "冬日红围巾", "服饰", makeWinterScarf},
 	}
 
@@ -92,96 +87,6 @@ func fillOverlayRect(img *image.NRGBA, x, y, w, h int, c color.NRGBA) {
 			img.SetNRGBA(x+px, y+py, c)
 		}
 	}
-}
-
-func makeSantaHat() *image.NRGBA {
-	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
-	red := color.NRGBA{R: 205, G: 38, B: 46, A: 255}
-	darkRed := color.NRGBA{R: 168, G: 26, B: 34, A: 255}
-	trim := color.NRGBA{R: 245, G: 245, B: 248, A: 255}
-	pom := color.NRGBA{R: 255, G: 255, B: 255, A: 255}
-
-	// Hat top + upper sides
-	fillOverlayRect(img, 40, 0, 8, 8, red)
-	fillOverlayRect(img, 42, 2, 4, 4, darkRed)
-	for _, x0 := range []int{32, 40, 48, 56} {
-		fillOverlayRect(img, x0, 8, 8, 2, red)
-		fillOverlayRect(img, x0, 10, 8, 1, trim)
-	}
-	// Side hanging tail & white pom
-	fillOverlayRect(img, 48, 10, 3, 2, red)
-	fillOverlayRect(img, 49, 12, 2, 2, pom)
-	return img
-}
-
-func makePumpkinBand() *image.NRGBA {
-	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
-	band := color.NRGBA{R: 38, G: 34, B: 48, A: 255}
-	pumpkin := color.NRGBA{R: 238, G: 118, B: 28, A: 255}
-	ridge := color.NRGBA{R: 204, G: 92, B: 18, A: 255}
-	stem := color.NRGBA{R: 72, G: 152, B: 56, A: 255}
-
-	for _, x0 := range []int{32, 40, 48, 56} {
-		fillOverlayRect(img, x0, 9, 8, 1, band)
-	}
-	// Mini pumpkin centerpiece on front Hat
-	fillOverlayRect(img, 42, 8, 4, 2, pumpkin)
-	img.SetNRGBA(43, 8, ridge)
-	img.SetNRGBA(44, 8, ridge)
-	fillOverlayRect(img, 43, 6, 2, 2, stem)
-	return img
-}
-
-func makeGoldenCrown() *image.NRGBA {
-	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
-	gold := color.NRGBA{R: 245, G: 196, B: 42, A: 255}
-	brightGold := color.NRGBA{R: 255, G: 224, B: 92, A: 255}
-	ruby := color.NRGBA{R: 220, G: 38, B: 68, A: 255}
-	emerald := color.NRGBA{R: 34, G: 197, B: 94, A: 255}
-
-	for _, x0 := range []int{32, 40, 48, 56} {
-		fillOverlayRect(img, x0, 9, 8, 2, gold)
-		for dx := 0; dx < 8; dx += 2 {
-			img.SetNRGBA(x0+dx, 8, brightGold)
-		}
-	}
-	img.SetNRGBA(43, 10, ruby)
-	img.SetNRGBA(44, 10, ruby)
-	img.SetNRGBA(35, 10, emerald)
-	img.SetNRGBA(51, 10, emerald)
-	return img
-}
-
-func makeCatEars() *image.NRGBA {
-	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
-	fur := color.NRGBA{R: 42, G: 44, B: 54, A: 255}
-	earPink := color.NRGBA{R: 244, G: 143, B: 177, A: 255}
-
-	// Headband across Hat top/front
-	fillOverlayRect(img, 40, 9, 8, 1, fur)
-	fillOverlayRect(img, 32, 9, 8, 1, fur)
-	fillOverlayRect(img, 48, 9, 8, 1, fur)
-	// Left & Right ears on Hat front/top corners
-	fillOverlayRect(img, 40, 7, 2, 2, fur)
-	img.SetNRGBA(41, 8, earPink)
-	fillOverlayRect(img, 46, 7, 2, 2, fur)
-	img.SetNRGBA(46, 8, earPink)
-	return img
-}
-
-func makeCyberVisor() *image.NRGBA {
-	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
-	frame := color.NRGBA{R: 28, G: 36, B: 48, A: 255}
-	glass := color.NRGBA{R: 34, G: 211, B: 238, A: 185}
-	glow := color.NRGBA{R: 165, G: 243, B: 252, A: 235}
-
-	// Front glass across eyes + thin side straps
-	fillOverlayRect(img, 40, 11, 8, 2, glass)
-	img.SetNRGBA(41, 11, glow)
-	img.SetNRGBA(42, 11, glow)
-	fillOverlayRect(img, 36, 11, 4, 1, frame)
-	fillOverlayRect(img, 48, 11, 4, 1, frame)
-	return img
 }
 
 func makeWinterScarf() *image.NRGBA {

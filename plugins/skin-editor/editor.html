@@ -7,145 +7,214 @@
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #fafafa;
+    --bg: transparent;
     --panel: #ffffff;
     --subtle: #f4f4f6;
     --ink: #18181b;
     --muted: #52525b;
     --border: #e4e4e7;
     --accent: #2563eb;
-    --accent-soft: rgba(37, 99, 235, 0.14);
-    --radius: 10px;
+    --accent-hover: #1d4ed8;
+    --accent-soft: rgba(37, 99, 235, 0.12);
+    --btn-text: #ffffff;
+    --ok: #15803d;
+    --danger: #b91c1c;
+    --radius: 12px;
+    --radius-ctl: 9px;
+    --shadow: none;
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: var(--font-sans);
   }
   :root[data-theme="dark"] {
-    --bg: #111113;
     --panel: #18181b;
     --subtle: #202024;
     --ink: #f4f4f5;
     --muted: #a1a1aa;
     --border: #2e2e34;
     --accent: #60a5fa;
-    --accent-soft: rgba(96, 165, 250, 0.16);
+    --accent-hover: #3b82f6;
+    --ok: #4ade80;
+    --danger: #f87171;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 14px; font: 13px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
-  .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
-  @media (max-width: 900px) { .workspace { grid-template-columns: 1fr; } }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: grid; gap: 12px; }
+  body { margin: 0; padding: 4px; background: transparent; color: var(--ink); font: 14px/1.55 var(--font-sans); user-select: none; }
+  .layout { display: grid; gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); display: grid; gap: 12px; }
+  .workbench { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
+  @media (max-width: 960px) { .workbench { grid-template-columns: 1fr; } }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; font-family: var(--font-display); }
+  .sub { margin: 0; font-size: 12px; color: var(--muted); }
   .toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  button, select, input[type="text"], input[type="file"], a.btn {
-    font: inherit; min-height: 34px; border-radius: 7px; border: 1px solid var(--border);
-    background: var(--panel); color: var(--ink); padding: 4px 10px; text-decoration: none;
-  }
-  button, a.btn { cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
-  button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .palette { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .swatch { width: 22px; height: 22px; min-height: 22px; padding: 0; border-radius: 5px; border: 1px solid var(--border); }
-  .stage-wrap {
-    position: relative; width: 512px; max-width: 100%; aspect-ratio: 1; margin: 0 auto;
-    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
-    background-image:
-      linear-gradient(45deg, rgba(128,128,128,.12) 25%, transparent 25%),
-      linear-gradient(-45deg, rgba(128,128,128,.12) 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, rgba(128,128,128,.12) 75%),
-      linear-gradient(-45deg, transparent 75%, rgba(128,128,128,.12) 75%);
-    background-size: 16px 16px;
-    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-  }
-  .stage-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; touch-action: none; }
-  #guide-canvas { pointer-events: none; }
-  .status-bar { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .preview-row { display: flex; justify-content: center; gap: 16px; padding: 12px; background: var(--subtle); border: 1px solid var(--border); border-radius: 8px; }
-  .preview-row canvas { width: 80px; height: 160px; image-rendering: pixelated; }
-  .field { display: grid; gap: 4px; }
-  .field label { font-size: 12px; color: var(--muted); font-weight: 600; }
-  .checks { display: grid; gap: 6px; }
-  .check { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
-  h2 { margin: 0; font-size: 14px; font-weight: 600; }
+  .seg { display: inline-flex; padding: 3px; border-radius: var(--radius-ctl); background: var(--subtle); border: 1px solid var(--border); gap: 3px; }
+  button, select, input[type="text"] { font: inherit; min-height: 34px; border-radius: var(--radius-ctl); border: 1px solid var(--border); background: var(--panel); color: var(--ink); padding: 5px 10px; }
+  button { cursor: pointer; font-weight: 500; transition: background-color 140ms ease, border-color 140ms ease; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--btn-text); }
+  button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+  button.active { background: var(--accent); border-color: var(--accent); color: var(--btn-text); }
+  button.seg-btn { border: none; background: transparent; min-height: 28px; padding: 4px 10px; font-size: 13px; }
+  button.seg-btn.active { background: var(--panel); color: var(--accent); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .palette-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .swatch { width: 22px; height: 22px; min-height: 22px; padding: 0; border-radius: 6px; border: 1px solid rgba(128,128,128,0.45); cursor: pointer; }
+  .swatch.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .color-wrap { display: inline-flex; align-items: center; gap: 6px; }
+  input[type="color"] { width: 34px; height: 28px; border: 1px solid var(--border); border-radius: 7px; padding: 2px; background: var(--panel); cursor: pointer; }
+  .check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); cursor: pointer; }
+  .check input { width: 15px; height: 15px; accent-color: var(--accent); }
+  .part-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+  .split-canvas-area { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 14px; align-items: start; }
+  @media (max-width: 720px) { .split-canvas-area { grid-template-columns: 1fr; } }
+  .net-box { background: var(--subtle); border: 1px solid var(--border); border-radius: var(--radius-ctl); padding: 10px; display: grid; gap: 8px; }
+  .net-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .net-tile { display: grid; gap: 2px; justify-items: center; padding: 4px; border-radius: 7px; border: 1px solid var(--border); background: var(--panel); cursor: pointer; min-height: 44px; }
+  .net-tile.active { border-color: var(--accent); background: var(--accent-soft); }
+  .net-tile canvas { image-rendering: pixelated; border-radius: 3px; background: repeating-conic-gradient(rgba(128,128,128,0.16) 0% 25%, transparent 0% 50%) 50% / 8px 8px; }
+  .net-tile span { font-size: 10px; font-weight: 600; color: var(--muted); }
+  .net-tile.active span { color: var(--accent); }
+  .canvas-stage { display: grid; justify-items: center; gap: 8px; padding: 12px; border-radius: var(--radius-ctl); background: var(--subtle); border: 1px solid var(--border); overflow: auto; }
+  .canvas-frame { position: relative; display: inline-block; line-height: 0; border: 1px solid var(--border); border-radius: 4px; background-color: var(--panel); background-image: linear-gradient(45deg, rgba(128,128,128,0.14) 25%, transparent 25%), linear-gradient(-45deg, rgba(128,128,128,0.14) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(128,128,128,0.14) 75%), linear-gradient(-45deg, transparent 75%, rgba(128,128,128,0.14) 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
+  .canvas-frame canvas.pixel-canvas { display: block; image-rendering: pixelated; cursor: crosshair; touch-action: none; }
+  .canvas-frame canvas.overlay-canvas { position: absolute; inset: 0; pointer-events: none; }
+  .status-bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); width: 100%; }
+  label.field { display: grid; gap: 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .msg { font-size: 12px; margin: 0; color: var(--muted); }
+  .msg.ok { color: var(--ok); font-weight: 500; }
+  .msg.err { color: var(--danger); font-weight: 500; }
+  input[type="file"] { display: none; }
+  .divider { height: 1px; background: var(--border); margin: 2px 0; }
 </style>
 </head>
 <body>
-<div class="workspace">
-  <div class="card">
-    <div class="toolbar">
-      <button type="button" data-tool="pencil" class="active">画笔</button>
-      <button type="button" data-tool="eraser">橡皮擦</button>
-      <button type="button" data-tool="picker">吸管</button>
-      <button type="button" data-tool="bucket">油漆桶</button>
-      <button id="undo-btn" type="button" disabled>撤销</button>
-      <button id="redo-btn" type="button" disabled>重做</button>
-      <select id="layer-filter" aria-label="绘制区域限制">
-        <option value="all">全部 UV 区域</option>
-        <option value="base">仅基础层</option>
-        <option value="outer">仅外层饰品</option>
-      </select>
-    </div>
-
-    <div class="palette">
-      <input id="color-input" type="color" value="#2563eb" title="当前画笔颜色" />
-      <div id="swatches" class="palette"></div>
-      <label class="check"><input id="opt-mirror" type="checkbox" /> 水平对称绘制</label>
-      <label class="check"><input id="opt-grid" type="checkbox" checked /> 像素网格</label>
-      <label class="check"><input id="opt-uv" type="checkbox" checked /> UV 分区标注</label>
-    </div>
-
-    <div class="stage-wrap">
-      <canvas id="skin-canvas" width="64" height="64"></canvas>
-      <canvas id="guide-canvas" width="512" height="512"></canvas>
-    </div>
-    <div class="status-bar">
-      <span id="hover-info">悬停画布查看 UV 坐标与部件名称</span>
-      <span id="dim-info">64×64 (Standard)</span>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>实时人物预览</h2>
-    <div class="preview-row">
-      <canvas id="preview-front" width="16" height="32"></canvas>
-      <canvas id="preview-back" width="16" height="32"></canvas>
-    </div>
-
-    <div class="checks">
-      <label class="check"><input id="prev-outer" type="checkbox" checked /> 显示第二外层饰品</label>
-    </div>
-
-    <div class="field">
-      <label for="model-select">手臂模型</label>
-      <select id="model-select">
-        <option value="default">标准手臂 (Steve 4px)</option>
-        <option value="slim">纤细手臂 (Alex 3px)</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label for="source-select">载入皮肤或模板</label>
-      <select id="source-select"><option value="">选择模板或已有皮肤</option></select>
-    </div>
-
-    <div class="field">
-      <label for="local-file">导入本地 PNG</label>
-      <input id="local-file" type="file" accept="image/png" />
-    </div>
-
-    <div class="field">
-      <label for="save-name">输出材质名称</label>
-      <input id="save-name" type="text" maxlength="255" placeholder="我的原创皮肤" />
-    </div>
-
-    <div class="field">
-      <label for="equip-char">可选同时穿戴到角色</label>
-      <select id="equip-char"><option value="">仅保存到我的材质</option></select>
+<div class="layout">
+  <section class="card">
+    <div class="part-controls">
+      <div class="seg" role="tablist" aria-label="编辑模式">
+        <button id="mode-split-btn" class="seg-btn active" type="button">单面拆绘模式</button>
+        <button id="mode-uv-btn" class="seg-btn" type="button">完整 UV 展开图</button>
+      </div>
+      <div class="toolbar">
+        <button id="pick-site-btn" class="primary" type="button">从站点皮肤库导入</button>
+        <label for="local-file" style="cursor:pointer"><span style="display:inline-flex;align-items:center;min-height:34px;padding:5px 10px;border-radius:var(--radius-ctl);border:1px solid var(--border);background:var(--panel);font-weight:500">上传本地 PNG</span></label>
+        <input id="local-file" type="file" accept="image/png" />
+        <select id="tpl-select" aria-label="选择内置模板"><option value="">载入基础模板…</option></select>
+      </div>
     </div>
 
     <div class="toolbar">
-      <a id="download-link" class="btn" download="custom-skin.png">下载 PNG</a>
-      <button id="save-btn" class="primary" type="button">保存到我的材质</button>
-      <button id="equip-btn" type="button" disabled>保存并穿戴</button>
+      <button type="button" class="tool active" data-tool="brush" title="快捷键 B">画笔 (B)</button>
+      <button type="button" class="tool" data-tool="eraser" title="快捷键 E">橡皮 (E)</button>
+      <button type="button" class="tool" data-tool="eyedropper" title="快捷键 I">吸管 (I)</button>
+      <button type="button" class="tool" data-tool="fill" title="快捷键 G">油漆桶 (G)</button>
+      <button type="button" class="tool" data-tool="line" title="快捷键 L">直线 (L)</button>
+      <button type="button" class="tool" data-tool="rect" title="快捷键 R">矩形 (R)</button>
+      <button type="button" class="tool" data-tool="shade" title="快捷键 S（按住 Alt 加深）">明暗笔 (S)</button>
+      <button id="btn-undo" type="button" disabled title="Ctrl+Z">撤销</button>
+      <button id="btn-redo" type="button" disabled title="Ctrl+Y">重做</button>
     </div>
-    <p id="save-note" class="status"></p>
+
+    <div class="palette-row">
+      <label class="color-wrap"><input id="color-picker" type="color" value="#2563eb" /><span class="sub" id="color-hex">#2563eb</span></label>
+      <div id="swatches" class="palette-row"></div>
+      <span class="sub" style="margin-left:4px">最近:</span>
+      <div id="recent-colors" class="palette-row"></div>
+    </div>
+
+    <div class="toolbar">
+      <label class="check"><input id="chk-sym" type="checkbox" /> 水平对称绘制</label>
+      <label class="check"><input id="chk-grid" type="checkbox" checked /> 像素网格</label>
+      <label class="check" id="wrap-ghost"><input id="chk-ghost" type="checkbox" checked /> 外层显示底层参考</label>
+      <label class="check" id="wrap-uvlabels" hidden><input id="chk-labels" type="checkbox" checked /> 面标注（顶/底/前/后/左/右）</label>
+      <label class="check" id="wrap-shade-dark" hidden><input id="chk-shade-dark" type="checkbox" /> 明暗笔加深像素</label>
+    </div>
+  </section>
+
+  <div class="workbench">
+    <section class="card" id="split-panel">
+      <div class="part-controls">
+        <div class="seg" id="part-tabs">
+          <button type="button" class="seg-btn active" data-part="head">头部</button>
+          <button type="button" class="seg-btn" data-part="torso">躯干</button>
+          <button type="button" class="seg-btn" data-part="rarm">右臂</button>
+          <button type="button" class="seg-btn" data-part="larm">左臂</button>
+          <button type="button" class="seg-btn" data-part="rleg">右腿</button>
+          <button type="button" class="seg-btn" data-part="lleg">左腿</button>
+        </div>
+        <div class="seg" id="layer-tabs">
+          <button type="button" class="seg-btn active" data-layer="base">基础层</button>
+          <button type="button" class="seg-btn" data-layer="outer">第二外层</button>
+        </div>
+      </div>
+
+      <div class="split-canvas-area">
+        <div class="net-box">
+          <strong style="font-size:12px">选择当前部位平面（6 面）</strong>
+          <div id="net-grid" class="net-grid"></div>
+          <p class="sub" id="net-info"></p>
+        </div>
+        <div class="canvas-stage">
+          <div class="canvas-frame" id="split-frame">
+            <canvas id="split-canvas" class="pixel-canvas"></canvas>
+            <canvas id="split-overlay" class="overlay-canvas"></canvas>
+          </div>
+          <div class="status-bar">
+            <span id="split-face-title">头部 基础层 前面 (8×8)</span>
+            <span id="hover-coord">悬停像素查看 UV 坐标</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="uv-panel" hidden>
+      <div class="part-controls">
+        <h2>完整 64×64 UV 展开图</h2>
+        <div class="toolbar">
+          <span class="sub">缩放</span>
+          <select id="uv-zoom">
+            <option value="7">7×</option>
+            <option value="8" selected>8×</option>
+            <option value="10">10×</option>
+          </select>
+        </div>
+      </div>
+      <div class="canvas-stage">
+        <div class="canvas-frame" id="uv-frame">
+          <canvas id="uv-canvas" class="pixel-canvas" width="512" height="512"></canvas>
+          <canvas id="uv-overlay" class="overlay-canvas" width="512" height="512"></canvas>
+        </div>
+        <div class="status-bar">
+          <span id="uv-hover">点击或拖动即可在 UV 上直接绘制</span>
+          <span>64×64 标准材质坐标</span>
+        </div>
+      </div>
+    </section>
+
+    <aside class="card">
+      <h2>模型与导出保存</h2>
+      <p class="sub">每次绘制会自动同步至右侧原生 3D 人物预览，可随时拖拽旋转检查穿模与接缝。</p>
+
+      <label class="field">手臂模型
+        <select id="skin-model">
+          <option value="default">经典手臂（Steve 4px）</option>
+          <option value="slim">纤细手臂（Alex 3px）</option>
+        </select>
+      </label>
+
+      <label class="field">皮肤名称
+        <input id="save-name" type="text" maxlength="255" value="我的原创皮肤" />
+      </label>
+
+      <label class="field">保存后穿戴到角色（可选）
+        <select id="save-char"><option value="0">仅保存到我的材质库</option></select>
+      </label>
+
+      <div class="divider"></div>
+      <div class="toolbar">
+        <button id="save-btn" class="primary" type="button" style="flex:1">保存到皮肤库</button>
+        <button id="dl-btn" type="button">下载 PNG</button>
+      </div>
+      <button id="clear-layer-btn" type="button">清空当前第二外层（仅基础层以外）</button>
+      <p id="editor-msg" class="msg"></p>
+    </aside>
   </div>
 </div>
 
@@ -155,84 +224,126 @@
   const hostMap = new Map();
   let seq = 0;
 
-  const skinCanvas = document.getElementById('skin-canvas');
-  const sCtx = skinCanvas.getContext('2d', { willReadFrequently: true });
-  const guideCanvas = document.getElementById('guide-canvas');
-  const gCtx = guideCanvas.getContext('2d');
-  const fCanvas = document.getElementById('preview-front');
-  const fCtx = fCanvas.getContext('2d');
-  const bCanvas = document.getElementById('preview-back');
-  const bCtx = bCanvas.getContext('2d');
+  // Offscreen 64x64 pixel backing store
+  const skinCanvas = document.createElement('canvas');
+  skinCanvas.width = 64;
+  skinCanvas.height = 64;
+  const skinCtx = skinCanvas.getContext('2d', { willReadFrequently: true });
 
-  let tool = 'pencil';
-  let drawing = false;
-  let lastPt = null;
-  let hoverPt = null;
+  const SWATCHES = [
+    '#18181b', '#ffffff', '#f5cba7', '#d49a6a',
+    '#8d5524', '#ef4444', '#f97316', '#eab308',
+    '#22c55e', '#14b8a6', '#3b82f6', '#2563eb',
+    '#6366f1', '#a855f7', '#ec4899', '#64748b'
+  ];
+  let recentColors = [];
+
+  const PART_LABELS = {
+    head: '头部', torso: '躯干', rarm: '右臂', larm: '左臂', rleg: '右腿', lleg: '左腿'
+  };
+  const FACE_ORDER = ['top', 'bottom', 'right', 'front', 'left', 'back'];
+  const FACE_LABELS = { top: '顶', bottom: '底', right: '右', front: '前', left: '左', back: '后' };
+
+  function makeBoxFaces(bx, by, w, h, d) {
+    return {
+      top:    { key: 'top',    label: '顶', x: bx + d,         y: by,     w: w, h: d },
+      bottom: { key: 'bottom', label: '底', x: bx + d + w,     y: by,     w: w, h: d },
+      right:  { key: 'right',  label: '右', x: bx,             y: by + d, w: d, h: h },
+      front:  { key: 'front',  label: '前', x: bx + d,         y: by + d, w: w, h: h },
+      left:   { key: 'left',   label: '左', x: bx + d + w,     y: by + d, w: d, h: h },
+      back:   { key: 'back',   label: '后', x: bx + 2 * d + w, y: by + d, w: w, h: h }
+    };
+  }
+
+  function getPartsUV(model) {
+    const armW = model === 'slim' ? 3 : 4;
+    return {
+      head:  { label: '头部', base: makeBoxFaces(0, 0, 8, 8, 8),       outer: makeBoxFaces(32, 0, 8, 8, 8),       color: '#2563eb', outerColor: '#0284c7' },
+      torso: { label: '躯干', base: makeBoxFaces(16, 16, 8, 12, 4),    outer: makeBoxFaces(16, 32, 8, 12, 4),    color: '#0d9488', outerColor: '#059669' },
+      rarm:  { label: '右臂', base: makeBoxFaces(40, 16, armW, 12, 4), outer: makeBoxFaces(40, 32, armW, 12, 4), color: '#7c3aed', outerColor: '#9333ea' },
+      larm:  { label: '左臂', base: makeBoxFaces(32, 48, armW, 12, 4), outer: makeBoxFaces(48, 48, armW, 12, 4), color: '#db2777', outerColor: '#e11d48' },
+      rleg:  { label: '右腿', base: makeBoxFaces(0, 16, 4, 12, 4),     outer: makeBoxFaces(0, 32, 4, 12, 4),     color: '#d97706', outerColor: '#ea580c' },
+      lleg:  { label: '左腿', base: makeBoxFaces(16, 48, 4, 12, 4),    outer: makeBoxFaces(0, 48, 4, 12, 4),    color: '#4f46e5', outerColor: '#6366f1' }
+    };
+  }
+
+  let mode = 'split'; // 'split' | 'uv'
+  let tool = 'brush'; // 'brush' | 'eraser' | 'eyedropper' | 'fill' | 'line' | 'rect' | 'shade'
+  let activePart = 'head';
+  let activeLayer = 'base';
+  let activeFace = 'front';
+  let skinModel = 'default';
+  let currentColor = '#2563eb';
+  let templatesCache = [];
+
   let undoStack = [];
   let redoStack = [];
-  let templates = [];
-  let userSkins = [];
-  let pendingContextHash = '';
+  let strokeSnapshot = null;
+  let strokeMode = null; // null | 'split' | 'uv'
+  let shapeStart = null;
+  let shapeEnd = null;
+  let dirty = false;
+  let previewTimer = null;
+  let loadedFromHostHash = false;
 
-  const paletteColors = [
-    '#18181b', '#ffffff', '#f3c6a5', '#d99b72',
-    '#dc2626', '#ea580c', '#eab308', '#16a34a',
-    '#0284c7', '#2563eb', '#7c3aed', '#db2777'
-  ];
+  function postResize() {
+    window.parent.postMessage({
+      type: 'wishingskin:resize',
+      height: Math.max(420, Math.ceil(document.documentElement.scrollHeight))
+    }, '*');
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(postResize).observe(document.documentElement);
+  }
+  window.addEventListener('load', postResize);
 
-  const uvZones = [
-    { name: '头部基础', layer: 'base', x: 0, y: 0, w: 32, h: 16, color: '#2563eb' },
-    { name: '头饰外层 Hat', layer: 'outer', x: 32, y: 0, w: 32, h: 16, color: '#0ea5e9' },
-    { name: '右腿基础', layer: 'base', x: 0, y: 16, w: 16, h: 16, color: '#16a34a' },
-    { name: '躯干基础', layer: 'base', x: 16, y: 16, w: 24, h: 16, color: '#ea580c' },
-    { name: '右臂基础', layer: 'base', x: 40, y: 16, w: 16, h: 16, color: '#9333ea' },
-    { name: '右腿外层', layer: 'outer', x: 0, y: 32, w: 16, h: 16, color: '#22c55e' },
-    { name: '夹克外层', layer: 'outer', x: 16, y: 32, w: 24, h: 16, color: '#f97316' },
-    { name: '右袖外层', layer: 'outer', x: 40, y: 32, w: 16, h: 16, color: '#a855f7' },
-    { name: '左腿外层', layer: 'outer', x: 0, y: 48, w: 16, h: 16, color: '#14b8a6' },
-    { name: '左腿基础', layer: 'base', x: 16, y: 48, w: 16, h: 16, color: '#0d9488' },
-    { name: '左臂基础', layer: 'base', x: 32, y: 48, w: 16, h: 16, color: '#db2777' },
-    { name: '左袖外层', layer: 'outer', x: 48, y: 48, w: 16, h: 16, color: '#ec4899' }
-  ];
-
-  // Regions supporting symmetrical X drawing across face / torso front/back/top/bottom.
-  const mirrorBands = [
-    [8, 0, 8, 8], [16, 0, 8, 8], [8, 8, 8, 8], [24, 8, 8, 8],
-    [40, 0, 8, 8], [48, 0, 8, 8], [40, 8, 8, 8], [56, 8, 8, 8],
-    [20, 16, 8, 4], [28, 16, 8, 4], [20, 20, 8, 12], [32, 20, 8, 12],
-    [20, 32, 8, 4], [28, 32, 8, 4], [20, 36, 8, 12], [32, 36, 8, 12]
-  ];
+  function applyHostContext(ctx) {
+    if (!ctx || typeof ctx !== 'object') return;
+    document.documentElement.dataset.theme = ctx.theme === 'dark' ? 'dark' : 'light';
+    if (ctx.tokens && typeof ctx.tokens === 'object') {
+      const s = document.documentElement.style;
+      const map = {
+        panel: '--panel', subtle: '--subtle', ink: '--ink', muted: '--muted', border: '--border',
+        accent: '--accent', accentHover: '--accent-hover', accentSoft: '--accent-soft',
+        buttonText: '--btn-text', error: '--danger', radiusCard: '--radius',
+        radiusControl: '--radius-ctl', shadowCard: '--shadow', fontSans: '--font-sans', fontDisplay: '--font-display'
+      };
+      for (const [k, cssVar] of Object.entries(map)) {
+        if (typeof ctx.tokens[k] === 'string' && ctx.tokens[k]) s.setProperty(cssVar, ctx.tokens[k]);
+      }
+    }
+    if (typeof ctx.fontFaceCss === 'string') {
+      let el = document.getElementById('ws-host-fonts');
+      if (!el) { el = document.createElement('style'); el.id = 'ws-host-fonts'; document.head.appendChild(el); }
+      el.textContent = ctx.fontFaceCss;
+    }
+    if (!loadedFromHostHash && ctx.textureHash) {
+      loadedFromHostHash = true;
+      void loadSkinFromHash(ctx.textureHash, ctx.textureName, ctx.textureModel);
+    }
+    requestAnimationFrame(postResize);
+  }
 
   window.addEventListener('message', (event) => {
     const msg = event.data;
     if (!msg || typeof msg !== 'object') return;
-    if (msg.type === 'wishingskin:context' && msg.context) {
-      document.documentElement.dataset.theme = msg.context.theme === 'dark' ? 'dark' : 'light';
-      if (msg.context.texture && msg.context.texture.fileHash) {
-        pendingContextHash = msg.context.texture.fileHash;
-        document.getElementById('model-select').value = msg.context.texture.model === 'slim' ? 'slim' : 'default';
-        if (!document.getElementById('save-name').value) {
-          document.getElementById('save-name').value = (msg.context.texture.name || '皮肤') + ' 编辑版';
-        }
-        void loadHashIntoCanvas(pendingContextHash);
-      }
-      renderGuides();
-      return;
-    }
+    if (msg.type === 'wishingskin:context' && msg.context) { applyHostContext(msg.context); return; }
     if (msg.type === 'wishingskin:response' && reqMap.has(msg.id)) {
       const h = reqMap.get(msg.id); reqMap.delete(msg.id); clearTimeout(h.t);
       h.resolve({ status: msg.status, body: msg.body });
+      return;
     }
-    if (msg.type === 'wishingskin:host-response' && hostMap.has(msg.id)) {
+    if (msg.type === 'wishingskin:host_result' && hostMap.has(msg.id)) {
       const h = hostMap.get(msg.id); hostMap.delete(msg.id); clearTimeout(h.t);
-      h.resolve(msg);
+      if (msg.ok) h.resolve(msg.data);
+      else h.reject(Object.assign(new Error(msg.error || '操作失败'), { status: msg.status }));
     }
   });
 
   function callPlugin(method, path, body) {
     const id = 'ed-' + (++seq);
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, 15000);
+      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, 10000);
       reqMap.set(id, { resolve, reject, t });
       window.parent.postMessage({ type: 'wishingskin:request', id, method, path, body }, '*');
     });
@@ -241,418 +352,771 @@
   function callHost(action, payload) {
     const id = 'edh-' + (++seq);
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => { hostMap.delete(id); reject(new Error('宿主响应超时')); }, 15000);
+      const t = setTimeout(() => { hostMap.delete(id); reject(new Error('宿主响应超时')); }, 60000);
       hostMap.set(id, { resolve, reject, t });
       window.parent.postMessage({ type: 'wishingskin:host', id, action, payload }, '*');
     });
   }
 
-  function pushSnapshot() {
-    const snap = sCtx.getImageData(0, 0, 64, 64);
+  function setDirty(next) {
+    const val = !!next;
+    if (dirty === val) return;
+    dirty = val;
+    callHost('setDirty', { dirty: val }).catch(() => {});
+  }
+
+  function setMsg(text, cls) {
+    const el = document.getElementById('editor-msg');
+    el.textContent = text || '';
+    el.className = 'msg' + (cls ? ' ' + cls : '');
+  }
+
+  function pushPreview3D() {
+    if (previewTimer) clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => {
+      const dataUrl = skinCanvas.toDataURL('image/png');
+      callHost('setPreview', {
+        pngBase64: dataUrl,
+        model: skinModel,
+        title: '在线编辑器 3D 预览'
+      }).catch(() => {});
+    }, 110);
+  }
+
+  function captureSnapshot() {
+    return skinCtx.getImageData(0, 0, 64, 64);
+  }
+
+  function pushUndoSnapshot(snap) {
     undoStack.push(snap);
-    if (undoStack.length > 30) undoStack.shift();
+    if (undoStack.length > 40) undoStack.shift();
     redoStack = [];
     syncHistoryButtons();
   }
 
   function syncHistoryButtons() {
-    document.getElementById('undo-btn').disabled = undoStack.length <= 1;
-    document.getElementById('redo-btn').disabled = redoStack.length === 0;
+    document.getElementById('btn-undo').disabled = undoStack.length === 0;
+    document.getElementById('btn-redo').disabled = redoStack.length === 0;
   }
 
-  function undo() {
-    if (undoStack.length <= 1) return;
-    const cur = undoStack.pop();
-    redoStack.push(cur);
-    sCtx.putImageData(undoStack[undoStack.length - 1], 0, 0);
-    syncHistoryButtons();
-    renderPreviews();
+  function recordRecentColor(hex) {
+    const h = hex.toLowerCase();
+    recentColors = [h, ...recentColors.filter(c => c !== h)].slice(0, 8);
+    renderRecentColors();
   }
 
-  function redo() {
-    if (!redoStack.length) return;
-    const next = redoStack.pop();
-    undoStack.push(next);
-    sCtx.putImageData(next, 0, 0);
-    syncHistoryButtons();
-    renderPreviews();
+  function setColor(hex) {
+    currentColor = hex;
+    document.getElementById('color-picker').value = hex;
+    document.getElementById('color-hex').textContent = hex;
+    renderSwatches();
+    renderRecentColors();
   }
 
-  function zoneAt(x, y) {
-    return uvZones.find(z => x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h);
+  function renderSwatches() {
+    const el = document.getElementById('swatches');
+    el.innerHTML = '';
+    for (const c of SWATCHES) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'swatch' + (currentColor.toLowerCase() === c ? ' active' : '');
+      btn.style.background = c;
+      btn.title = c;
+      btn.addEventListener('click', () => setColor(c));
+      el.appendChild(btn);
+    }
   }
 
-  function canPaintAt(x, y) {
-    const f = document.getElementById('layer-filter').value;
-    if (f === 'all') return true;
-    const z = zoneAt(x, y);
-    return !z || z.layer === f;
+  function renderRecentColors() {
+    const el = document.getElementById('recent-colors');
+    el.innerHTML = '';
+    for (const c of recentColors) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'swatch' + (currentColor.toLowerCase() === c ? ' active' : '');
+      btn.style.background = c;
+      btn.title = c;
+      btn.addEventListener('click', () => setColor(c));
+      el.appendChild(btn);
+    }
   }
 
-  function hexToRgba(hex) {
-    const v = parseInt(hex.slice(1), 16);
-    return [(v >> 16) & 255, (v >> 8) & 255, v & 255, 255];
+  function hexToRGBA(hex) {
+    const clean = hex.replace('#', '');
+    return [
+      parseInt(clean.slice(0, 2), 16) || 0,
+      parseInt(clean.slice(2, 4), 16) || 0,
+      parseInt(clean.slice(4, 6), 16) || 0,
+      255
+    ];
   }
 
-  function rgbaToHex(r, g, b) {
-    return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+  function rgbToHex(r, g, b) {
+    return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
   }
 
-  function mirrorCoord(x, y) {
-    for (const [bx, by, bw, bh] of mirrorBands) {
-      if (x >= bx && x < bx + bw && y >= by && y < by + bh) {
-        return [bx + (bw - 1 - (x - bx)), y];
+  function adjustPixelBrightness(r, g, b, delta) {
+    const clamp = v => Math.max(0, Math.min(255, Math.round(v + delta)));
+    return [clamp(r), clamp(g), clamp(b)];
+  }
+
+  function findFaceAtUV(px, py) {
+    const parts = getPartsUV(skinModel);
+    for (const partKey of Object.keys(parts)) {
+      for (const layerKey of ['base', 'outer']) {
+        const faces = parts[partKey][layerKey];
+        for (const faceKey of FACE_ORDER) {
+          const f = faces[faceKey];
+          if (px >= f.x && px < f.x + f.w && py >= f.y && py < f.y + f.h) {
+            return { partKey, layerKey, faceKey, f, lx: px - f.x, ly: py - f.y };
+          }
+        }
       }
     }
     return null;
   }
 
-  function setPixel(imgData, x, y, rgba) {
-    if (x < 0 || y < 0 || x >= 64 || y >= 64 || !canPaintAt(x, y)) return;
-    const i = (y * 64 + x) * 4;
-    imgData.data[i] = rgba[0];
-    imgData.data[i + 1] = rgba[1];
-    imgData.data[i + 2] = rgba[2];
-    imgData.data[i + 3] = rgba[3];
+  function getSymmetricTarget(px, py) {
+    const hit = findFaceAtUV(px, py);
+    if (!hit) return null;
+    const parts = getPartsUV(skinModel);
+    const { partKey, layerKey, faceKey, f, lx, ly } = hit;
+    const oppPart = { head: 'head', torso: 'torso', rarm: 'larm', larm: 'rarm', rleg: 'lleg', lleg: 'rleg' }[partKey];
+    let oppFace = faceKey;
+    if (faceKey === 'left') oppFace = 'right';
+    else if (faceKey === 'right') oppFace = 'left';
+    const tf = parts[oppPart][layerKey][oppFace];
+    const tx = tf.x + Math.max(0, Math.min(tf.w - 1, tf.w - 1 - lx));
+    const ty = tf.y + Math.max(0, Math.min(tf.h - 1, ly));
+    if (tx === px && ty === py) return null;
+    return { x: tx, y: ty };
   }
 
-  function floodFill(startX, startY, fillRgba) {
-    if (!canPaintAt(startX, startY)) return;
-    const img = sCtx.getImageData(0, 0, 64, 64);
-    const si = (startY * 64 + startX) * 4;
-    const target = [img.data[si], img.data[si + 1], img.data[si + 2], img.data[si + 3]];
-    if (target[0] === fillRgba[0] && target[1] === fillRgba[1] && target[2] === fillRgba[2] && target[3] === fillRgba[3]) return;
-
-    const stack = [[startX, startY]];
-    const seen = new Uint8Array(64 * 64);
-    while (stack.length) {
-      const [x, y] = stack.pop();
-      if (x < 0 || y < 0 || x >= 64 || y >= 64) continue;
-      const idx = y * 64 + x;
-      if (seen[idx] || !canPaintAt(x, y)) continue;
-      const off = idx * 4;
-      if (img.data[off] !== target[0] || img.data[off + 1] !== target[1] || img.data[off + 2] !== target[2] || img.data[off + 3] !== target[3]) continue;
-      seen[idx] = 1;
-      img.data[off] = fillRgba[0];
-      img.data[off + 1] = fillRgba[1];
-      img.data[off + 2] = fillRgba[2];
-      img.data[off + 3] = fillRgba[3];
-      stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  function applyPixelAt(data, px, py, rgba, altDark) {
+    if (px < 0 || py < 0 || px >= 64 || py >= 64) return;
+    const idx = (py * 64 + px) * 4;
+    if (tool === 'eraser') {
+      data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 0;
+    } else if (tool === 'shade') {
+      if (data[idx + 3] === 0) return;
+      const darken = altDark || document.getElementById('chk-shade-dark').checked;
+      const [nr, ng, nb] = adjustPixelBrightness(data[idx], data[idx + 1], data[idx + 2], darken ? -16 : 16);
+      data[idx] = nr; data[idx + 1] = ng; data[idx + 2] = nb;
+    } else {
+      data[idx] = rgba[0]; data[idx + 1] = rgba[1]; data[idx + 2] = rgba[2]; data[idx + 3] = rgba[3];
     }
-    sCtx.putImageData(img, 0, 0);
   }
 
-  function applyToolAt(x, y) {
-    if (tool === 'picker') {
-      const d = sCtx.getImageData(x, y, 1, 1).data;
-      if (d[3] > 0) document.getElementById('color-input').value = rgbaToHex(d[0], d[1], d[2]);
-      return;
-    }
-    if (tool === 'bucket') {
-      floodFill(x, y, hexToRgba(document.getElementById('color-input').value));
-      pushSnapshot();
-      renderPreviews();
-      return;
-    }
-    const rgba = tool === 'eraser' ? [0, 0, 0, 0] : hexToRgba(document.getElementById('color-input').value);
-    const img = sCtx.getImageData(0, 0, 64, 64);
-    const pts = lastPt ? bresenham(lastPt[0], lastPt[1], x, y) : [[x, y]];
-    const mirror = document.getElementById('opt-mirror').checked;
-    for (const [px, py] of pts) {
-      setPixel(img, px, py, rgba);
-      if (mirror) {
-        const mp = mirrorCoord(px, py);
-        if (mp) setPixel(img, mp[0], mp[1], rgba);
-      }
-    }
-    sCtx.putImageData(img, 0, 0);
-    lastPt = [x, y];
-    renderPreviews();
-  }
-
-  function bresenham(x0, y0, x1, y1) {
-    const out = [];
+  function drawLinePixels(pts, x0, y0, x1, y1) {
     let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
     let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     let err = dx + dy;
     while (true) {
-      out.push([x0, y0]);
+      pts.push([x0, y0]);
       if (x0 === x1 && y0 === y1) break;
       const e2 = 2 * err;
       if (e2 >= dy) { err += dy; x0 += sx; }
       if (e2 <= dx) { err += dx; y0 += sy; }
     }
-    return out;
   }
 
-  function canvasCoords(e) {
-    const r = skinCanvas.getBoundingClientRect();
-    const x = Math.min(63, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * 64)));
-    const y = Math.min(63, Math.max(0, Math.floor(((e.clientY - r.top) / r.height) * 64)));
-    return [x, y];
-  }
-
-  function renderGuides() {
-    gCtx.clearRect(0, 0, 512, 512);
-    const showGrid = document.getElementById('opt-grid').checked;
-    const showUV = document.getElementById('opt-uv').checked;
-
-    if (showGrid) {
-      gCtx.strokeStyle = 'rgba(128,128,128,0.22)';
-      gCtx.lineWidth = 1;
-      for (let i = 1; i < 64; i++) {
-        const p = i * 8 + 0.5;
-        gCtx.beginPath(); gCtx.moveTo(p, 0); gCtx.lineTo(p, 512); gCtx.stroke();
-        gCtx.beginPath(); gCtx.moveTo(0, p); gCtx.lineTo(512, p); gCtx.stroke();
+  function paintPoints(points, altDark) {
+    const img = skinCtx.getImageData(0, 0, 64, 64);
+    const d = img.data;
+    const rgba = hexToRGBA(currentColor);
+    const sym = document.getElementById('chk-sym').checked;
+    for (const [px, py] of points) {
+      applyPixelAt(d, px, py, rgba, altDark);
+      if (sym) {
+        const mir = getSymmetricTarget(px, py);
+        if (mir) applyPixelAt(d, mir.x, mir.y, rgba, altDark);
       }
     }
-    if (showUV) {
-      gCtx.font = '600 10px sans-serif';
-      for (const z of uvZones) {
-        gCtx.strokeStyle = z.color;
-        gCtx.lineWidth = 1.5;
-        gCtx.strokeRect(z.x * 8 + 1, z.y * 8 + 1, z.w * 8 - 2, z.h * 8 - 2);
-        gCtx.fillStyle = z.color;
-        gCtx.fillText(z.name, z.x * 8 + 4, z.y * 8 + 12);
+    skinCtx.putImageData(img, 0, 0);
+    if (tool !== 'eraser' && tool !== 'shade') recordRecentColor(currentColor);
+  }
+
+  function floodFillRegion(startX, startY, bounds) {
+    const img = skinCtx.getImageData(0, 0, 64, 64);
+    const d = img.data;
+    const i0 = (startY * 64 + startX) * 4;
+    const tr = d[i0], tg = d[i0 + 1], tb = d[i0 + 2], ta = d[i0 + 3];
+    const [nr, ng, nb, na] = hexToRGBA(currentColor);
+    if (tr === nr && tg === ng && tb === nb && ta === na) return;
+    const q = [[startX, startY]];
+    const seen = new Set();
+    while (q.length > 0) {
+      const [cx, cy] = q.pop();
+      if (cx < bounds.x || cx >= bounds.x + bounds.w || cy < bounds.y || cy >= bounds.y + bounds.h) continue;
+      const k = cy * 64 + cx;
+      if (seen.has(k)) continue;
+      const idx = k * 4;
+      if (d[idx] !== tr || d[idx + 1] !== tg || d[idx + 2] !== tb || d[idx + 3] !== ta) continue;
+      seen.add(k);
+      d[idx] = nr; d[idx + 1] = ng; d[idx + 2] = nb; d[idx + 3] = na;
+      q.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+    }
+    skinCtx.putImageData(img, 0, 0);
+    recordRecentColor(currentColor);
+  }
+
+  function renderSplitNet() {
+    const net = document.getElementById('net-grid');
+    net.innerHTML = '';
+    const parts = getPartsUV(skinModel);
+    const faces = parts[activePart][activeLayer];
+    const baseFaces = parts[activePart].base;
+
+    // 4 cols x 3 rows standard Minecraft box net layout
+    const layout = [
+      null, 'top', null, null,
+      'right', 'front', 'left', 'back',
+      null, 'bottom', null, null
+    ];
+
+    for (const faceKey of layout) {
+      if (!faceKey) {
+        const spacer = document.createElement('div');
+        net.appendChild(spacer);
+        continue;
       }
-    }
-    if (hoverPt) {
-      gCtx.strokeStyle = '#facc15';
-      gCtx.lineWidth = 2;
-      gCtx.strokeRect(hoverPt[0] * 8 + 1, hoverPt[1] * 8 + 1, 6, 6);
-    }
-  }
+      const f = faces[faceKey];
+      const bf = baseFaces[faceKey];
+      const tile = document.createElement('button');
+      tile.type = 'button';
+      tile.className = 'net-tile' + (activeFace === faceKey ? ' active' : '');
+      tile.title = f.label + ' (' + f.w + '×' + f.h + ')';
 
-  function renderPreviews() {
-    const slim = document.getElementById('model-select').value === 'slim';
-    const outer = document.getElementById('prev-outer').checked;
-    const armW = slim ? 3 : 4;
-
-    fCtx.clearRect(0, 0, 16, 32);
-    fCtx.drawImage(skinCanvas, 8, 8, 8, 8, 4, 0, 8, 8);
-    fCtx.drawImage(skinCanvas, 20, 20, 8, 12, 4, 8, 8, 12);
-    fCtx.drawImage(skinCanvas, 44, 20, armW, 12, 4 - armW, 8, armW, 12);
-    fCtx.drawImage(skinCanvas, 36, 52, armW, 12, 12, 8, armW, 12);
-    fCtx.drawImage(skinCanvas, 4, 20, 4, 12, 4, 20, 4, 12);
-    fCtx.drawImage(skinCanvas, 20, 52, 4, 12, 8, 20, 4, 12);
-    if (outer) {
-      fCtx.drawImage(skinCanvas, 40, 8, 8, 8, 4, 0, 8, 8);
-      fCtx.drawImage(skinCanvas, 20, 36, 8, 12, 4, 8, 8, 12);
-      fCtx.drawImage(skinCanvas, 44, 36, armW, 12, 4 - armW, 8, armW, 12);
-      fCtx.drawImage(skinCanvas, 52, 52, armW, 12, 12, 8, armW, 12);
-      fCtx.drawImage(skinCanvas, 4, 36, 4, 12, 4, 20, 4, 12);
-      fCtx.drawImage(skinCanvas, 4, 52, 4, 12, 8, 20, 4, 12);
-    }
-
-    const rBackX = slim ? 51 : 52;
-    const lBackX = slim ? 43 : 44;
-    const lSleeveBackX = slim ? 59 : 60;
-    bCtx.clearRect(0, 0, 16, 32);
-    bCtx.drawImage(skinCanvas, 24, 8, 8, 8, 4, 0, 8, 8);
-    bCtx.drawImage(skinCanvas, 32, 20, 8, 12, 4, 8, 8, 12);
-    bCtx.drawImage(skinCanvas, lBackX, 52, armW, 12, 4 - armW, 8, armW, 12);
-    bCtx.drawImage(skinCanvas, rBackX, 20, armW, 12, 12, 8, armW, 12);
-    bCtx.drawImage(skinCanvas, 28, 52, 4, 12, 4, 20, 4, 12);
-    bCtx.drawImage(skinCanvas, 12, 20, 4, 12, 8, 20, 4, 12);
-    if (outer) {
-      bCtx.drawImage(skinCanvas, 56, 8, 8, 8, 4, 0, 8, 8);
-      bCtx.drawImage(skinCanvas, 32, 36, 8, 12, 4, 8, 8, 12);
-      bCtx.drawImage(skinCanvas, lSleeveBackX, 52, armW, 12, 4 - armW, 8, armW, 12);
-      bCtx.drawImage(skinCanvas, rBackX, 36, armW, 12, 12, 8, armW, 12);
-      bCtx.drawImage(skinCanvas, 12, 52, 4, 12, 4, 20, 4, 12);
-      bCtx.drawImage(skinCanvas, 12, 36, 4, 12, 8, 20, 4, 12);
-    }
-
-    const dataUrl = skinCanvas.toDataURL('image/png');
-    const dl = document.getElementById('download-link');
-    dl.href = dataUrl;
-    dl.download = (document.getElementById('save-name').value.trim() || 'custom-skin') + '.png';
-  }
-
-  function loadImageDataUrl(dataUrl) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        sCtx.clearRect(0, 0, 64, 64);
-        sCtx.imageSmoothingEnabled = false;
-        sCtx.drawImage(img, 0, 0, 64, Math.min(64, img.height === img.width / 2 ? 32 : 64));
-        undoStack = []; redoStack = [];
-        pushSnapshot();
-        renderPreviews();
-        resolve();
-      };
-      img.onerror = () => reject(new Error('图像解码失败'));
-      img.src = dataUrl;
-    });
-  }
-
-  async function loadHashIntoCanvas(hash) {
-    const res = await callHost('getTextureDataUrl', { hash });
-    if (res.ok && res.data && res.data.dataUrl) {
-      await loadImageDataUrl(res.data.dataUrl);
-    }
-  }
-
-  async function saveResult(andEquip) {
-    const note = document.getElementById('save-note');
-    const charID = Number(document.getElementById('equip-char').value) || 0;
-    const model = document.getElementById('model-select').value;
-    const name = document.getElementById('save-name').value.trim() || '原创皮肤';
-    const dataUrl = skinCanvas.toDataURL('image/png');
-    note.textContent = '正在保存到我的材质…';
-
-    const saved = await callHost('saveTexture', {
-      kind: 'skin', model, name, pngBase64: dataUrl.split(',')[1]
-    });
-    if (!saved.ok) {
-      note.textContent = saved.error || '保存失败';
-      void callHost('notify', { message: note.textContent, kind: 'error' });
-      return;
-    }
-    const rec = saved.data;
-    if (andEquip && charID > 0 && rec && rec.id) {
-      if (rec.reviewState && rec.reviewState !== 'approved') {
-        const m = '皮肤已上传，等待审核通过后方可穿戴。';
-        note.textContent = m;
-        void callHost('notify', { message: m, kind: 'success' });
-        return;
+      const c = document.createElement('canvas');
+      const tileScale = f.h > 8 ? 3 : 4;
+      c.width = f.w * tileScale;
+      c.height = f.h * tileScale;
+      const tctx = c.getContext('2d');
+      tctx.imageSmoothingEnabled = false;
+      if (activeLayer === 'outer') {
+        tctx.globalAlpha = 0.28;
+        tctx.drawImage(skinCanvas, bf.x, bf.y, bf.w, bf.h, 0, 0, c.width, c.height);
+        tctx.globalAlpha = 1;
       }
-      const bound = await callHost('applyTexture', {
-        characterId: charID, kind: 'skin', recordId: rec.id, model
+      tctx.drawImage(skinCanvas, f.x, f.y, f.w, f.h, 0, 0, c.width, c.height);
+
+      const lbl = document.createElement('span');
+      lbl.textContent = f.label;
+      tile.append(c, lbl);
+      tile.addEventListener('click', () => {
+        activeFace = faceKey;
+        renderEditorViews();
       });
-      if (!bound.ok) {
-        note.textContent = bound.error || '保存成功但穿戴失败';
-        void callHost('notify', { message: note.textContent, kind: 'error' });
+      net.appendChild(tile);
+    }
+
+    const af = faces[activeFace];
+    document.getElementById('net-info').textContent =
+      PART_LABELS[activePart] + (activeLayer === 'outer' ? '外层' : '基础层') +
+      '  UV起点 (' + af.x + ', ' + af.y + ')  尺寸 ' + af.w + '×' + af.h;
+  }
+
+  function renderSplitCanvas() {
+    const parts = getPartsUV(skinModel);
+    const f = parts[activePart][activeLayer][activeFace];
+    const bf = parts[activePart].base[activeFace];
+    const cell = Math.max(22, Math.min(36, Math.floor(336 / Math.max(f.w, f.h))));
+    const cw = f.w * cell;
+    const ch = f.h * cell;
+
+    const canvas = document.getElementById('split-canvas');
+    const overlay = document.getElementById('split-overlay');
+    if (canvas.width !== cw || canvas.height !== ch) {
+      canvas.width = cw; canvas.height = ch;
+      overlay.width = cw; overlay.height = ch;
+    }
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.imageSmoothingEnabled = false;
+    if (activeLayer === 'outer' && document.getElementById('chk-ghost').checked) {
+      ctx.globalAlpha = 0.28;
+      ctx.drawImage(skinCanvas, bf.x, bf.y, bf.w, bf.h, 0, 0, cw, ch);
+      ctx.globalAlpha = 1;
+    }
+    ctx.drawImage(skinCanvas, f.x, f.y, f.w, f.h, 0, 0, cw, ch);
+
+    const octx = overlay.getContext('2d');
+    octx.clearRect(0, 0, cw, ch);
+    if (document.getElementById('chk-grid').checked) {
+      octx.strokeStyle = 'rgba(128,128,128,0.32)';
+      octx.lineWidth = 1;
+      for (let x = 1; x < f.w; x++) {
+        octx.beginPath(); octx.moveTo(x * cell + 0.5, 0); octx.lineTo(x * cell + 0.5, ch); octx.stroke();
+      }
+      for (let y = 1; y < f.h; y++) {
+        octx.beginPath(); octx.moveTo(0, y * cell + 0.5); octx.lineTo(cw, y * cell + 0.5); octx.stroke();
+      }
+    }
+    if (shapeStart && shapeEnd && strokeMode === 'split') {
+      drawShapeOverlay(octx, shapeStart.lx, shapeStart.ly, shapeEnd.lx, shapeEnd.ly, cell);
+    }
+
+    document.getElementById('split-face-title').textContent =
+      PART_LABELS[activePart] + ' ' + (activeLayer === 'outer' ? '第二外层' : '基础层') + ' ' + f.label + '面 (' + f.w + '×' + f.h + ')';
+  }
+
+  function renderFullUVCanvas() {
+    const zoom = Number(document.getElementById('uv-zoom').value) || 8;
+    const size = 64 * zoom;
+    const canvas = document.getElementById('uv-canvas');
+    const overlay = document.getElementById('uv-overlay');
+    if (canvas.width !== size || canvas.height !== size) {
+      canvas.width = size; canvas.height = size;
+      overlay.width = size; overlay.height = size;
+    }
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, size, size);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(skinCanvas, 0, 0, 64, 64, 0, 0, size, size);
+
+    const octx = overlay.getContext('2d');
+    octx.clearRect(0, 0, size, size);
+
+    if (document.getElementById('chk-grid').checked) {
+      octx.strokeStyle = 'rgba(128,128,128,0.22)';
+      octx.lineWidth = 1;
+      for (let i = 1; i < 64; i++) {
+        const p = i * zoom + 0.5;
+        octx.beginPath(); octx.moveTo(p, 0); octx.lineTo(p, size); octx.stroke();
+        octx.beginPath(); octx.moveTo(0, p); octx.lineTo(size, p); octx.stroke();
+      }
+    }
+
+    if (document.getElementById('chk-labels').checked) {
+      const parts = getPartsUV(skinModel);
+      octx.font = '600 ' + Math.max(9, Math.floor(zoom * 1.15)) + 'px system-ui, sans-serif';
+      octx.textBaseline = 'top';
+      for (const pk of Object.keys(parts)) {
+        const part = parts[pk];
+        for (const [lk, col] of [['base', part.color], ['outer', part.outerColor]]) {
+          const faces = part[lk];
+          for (const fk of FACE_ORDER) {
+            const f = faces[fk];
+            octx.strokeStyle = col;
+            octx.lineWidth = 1.2;
+            octx.strokeRect(f.x * zoom + 0.5, f.y * zoom + 0.5, f.w * zoom - 1, f.h * zoom - 1);
+            const tag = f.label;
+            octx.fillStyle = 'rgba(16, 16, 22, 0.68)';
+            octx.fillRect(f.x * zoom + 1, f.y * zoom + 1, Math.min(f.w * zoom - 2, zoom * 1.9), zoom * 1.5);
+            octx.fillStyle = '#ffffff';
+            octx.fillText(tag, f.x * zoom + 2, f.y * zoom + 2);
+          }
+        }
+      }
+    }
+
+    if (shapeStart && shapeEnd && strokeMode === 'uv') {
+      drawShapeOverlay(octx, shapeStart.px, shapeStart.py, shapeEnd.px, shapeEnd.py, zoom);
+    }
+  }
+
+  function drawShapeOverlay(octx, x0, y0, x1, y1, cell) {
+    octx.strokeStyle = currentColor;
+    octx.lineWidth = 2;
+    if (tool === 'rect') {
+      const rx = Math.min(x0, x1) * cell;
+      const ry = Math.min(y0, y1) * cell;
+      const rw = (Math.abs(x1 - x0) + 1) * cell;
+      const rh = (Math.abs(y1 - y0) + 1) * cell;
+      octx.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2);
+    } else if (tool === 'line') {
+      const pts = [];
+      drawLinePixels(pts, x0, y0, x1, y1);
+      octx.fillStyle = currentColor;
+      octx.globalAlpha = 0.65;
+      for (const [x, y] of pts) {
+        octx.fillRect(x * cell, y * cell, cell, cell);
+      }
+      octx.globalAlpha = 1;
+    }
+  }
+
+  function renderEditorViews() {
+    if (mode === 'split') {
+      renderSplitNet();
+      renderSplitCanvas();
+    } else {
+      renderFullUVCanvas();
+    }
+    requestAnimationFrame(postResize);
+  }
+
+  function commitShape(x0, y0, x1, y1, bounds, altDark) {
+    const pts = [];
+    if (tool === 'line') {
+      drawLinePixels(pts, x0, y0, x1, y1);
+    } else if (tool === 'rect') {
+      const minX = Math.max(bounds.x, Math.min(x0, x1));
+      const maxX = Math.min(bounds.x + bounds.w - 1, Math.max(x0, x1));
+      const minY = Math.max(bounds.y, Math.min(y0, y1));
+      const maxY = Math.min(bounds.y + bounds.h - 1, Math.max(y0, y1));
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          if (x === minX || x === maxX || y === minY || y === maxY) pts.push([x, y]);
+        }
+      }
+    }
+    if (pts.length > 0) paintPoints(pts, altDark);
+  }
+
+  function bindCanvasDrawing(canvas, mapper) {
+    let dragging = false;
+    let lastPos = null;
+
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
+      const pos = mapper(e);
+      if (!pos) return;
+
+      if (tool === 'eyedropper') {
+        const pxData = skinCtx.getImageData(pos.px, pos.py, 1, 1).data;
+        if (pxData[3] > 0) setColor(rgbToHex(pxData[0], pxData[1], pxData[2]));
         return;
       }
-      note.textContent = '皮肤已保存并穿戴到选定角色。';
-      void callHost('notify', { message: '皮肤已保存并穿戴。', kind: 'success' });
-      return;
-    }
-    note.textContent = '已保存到我的材质。';
-    void callHost('notify', { message: '皮肤已保存到我的材质。', kind: 'success' });
-  }
 
-  async function init() {
-    const sw = document.getElementById('swatches');
-    for (const hex of paletteColors) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'swatch';
-      b.style.background = hex;
-      b.title = hex;
-      b.addEventListener('click', () => { document.getElementById('color-input').value = hex; });
-      sw.appendChild(b);
-    }
+      strokeSnapshot = captureSnapshot();
+      strokeMode = pos.mode;
+      dragging = true;
+      lastPos = pos;
 
-    const [tplRes, texRes, charRes] = await Promise.all([
-      callPlugin('GET', '/templates'),
-      callHost('listTextures', { kind: 'skin', pageSize: 100 }),
-      callHost('listCharacters', {})
-    ]);
+      if (tool === 'fill') {
+        floodFillRegion(pos.px, pos.py, pos.bounds);
+        pushUndoSnapshot(strokeSnapshot);
+        strokeSnapshot = null; strokeMode = null; dragging = false;
+        setDirty(true);
+        renderEditorViews();
+        pushPreview3D();
+        return;
+      }
 
-    const sel = document.getElementById('source-select');
-    templates = (tplRes.status === 200 && tplRes.body.templates) ? tplRes.body.templates : [];
-    for (const tpl of templates) {
-      const opt = document.createElement('option');
-      opt.value = 'tpl:' + tpl.id;
-      opt.textContent = '[模板] ' + tpl.name;
-      sel.appendChild(opt);
-    }
+      if (tool === 'line' || tool === 'rect') {
+        shapeStart = pos; shapeEnd = pos;
+        renderEditorViews();
+        return;
+      }
 
-    userSkins = (texRes.ok && texRes.data && texRes.data.textures) ? texRes.data.textures.filter(x => !x.reviewState || x.reviewState === 'approved') : [];
-    for (const s of userSkins) {
-      const opt = document.createElement('option');
-      opt.value = 'hash:' + s.fileHash + ':' + (s.model || 'default');
-      opt.textContent = '[皮肤] ' + s.name;
-      sel.appendChild(opt);
-    }
-
-    const cSel = document.getElementById('equip-char');
-    const chars = (charRes.ok && charRes.data && charRes.data.characters) ? charRes.data.characters : [];
-    for (const c of chars) {
-      const opt = document.createElement('option');
-      opt.value = String(c.id);
-      opt.textContent = c.name;
-      cSel.appendChild(opt);
-    }
-
-    if (!pendingContextHash && templates.length) {
-      await loadImageDataUrl('data:image/png;base64,' + templates[0].pngBase64);
-    } else if (!pendingContextHash) {
-      pushSnapshot();
-      renderPreviews();
-    }
-    renderGuides();
-  }
-
-  for (const btn of document.querySelectorAll('[data-tool]')) {
-    btn.addEventListener('click', () => {
-      tool = btn.dataset.tool;
-      for (const b of document.querySelectorAll('[data-tool]')) b.classList.toggle('active', b === btn);
+      paintPoints([[pos.px, pos.py]], e.altKey);
+      renderEditorViews();
     });
+
+    canvas.addEventListener('pointermove', (e) => {
+      const pos = mapper(e);
+      if (pos) {
+        if (pos.mode === 'split') {
+          document.getElementById('hover-coord').textContent = 'UV (' + pos.px + ', ' + pos.py + ')  面内 (' + pos.lx + ', ' + pos.ly + ')';
+        } else {
+          document.getElementById('uv-hover').textContent = '当前 UV 坐标：(' + pos.px + ', ' + pos.py + ')';
+        }
+      }
+      if (!dragging || !pos) return;
+
+      if (tool === 'line' || tool === 'rect') {
+        shapeEnd = pos;
+        renderEditorViews();
+        return;
+      }
+      if (lastPos && lastPos.px === pos.px && lastPos.py === pos.py) return;
+      const pts = [];
+      if (lastPos) drawLinePixels(pts, lastPos.px, lastPos.py, pos.px, pos.py);
+      else pts.push([pos.px, pos.py]);
+      paintPoints(pts, e.altKey);
+      lastPos = pos;
+      renderEditorViews();
+    });
+
+    const finish = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      if ((tool === 'line' || tool === 'rect') && shapeStart && shapeEnd) {
+        commitShape(shapeStart.px, shapeStart.py, shapeEnd.px, shapeEnd.py, shapeStart.bounds, e.altKey);
+      }
+      shapeStart = null; shapeEnd = null;
+      if (strokeSnapshot) {
+        pushUndoSnapshot(strokeSnapshot);
+        strokeSnapshot = null;
+        setDirty(true);
+        pushPreview3D();
+      }
+      strokeMode = null; lastPos = null;
+      renderEditorViews();
+    };
+
+    canvas.addEventListener('pointerup', finish);
+    canvas.addEventListener('pointercancel', finish);
   }
 
-  skinCanvas.addEventListener('pointerdown', (e) => {
-    skinCanvas.setPointerCapture(e.pointerId);
-    drawing = true;
-    lastPt = null;
-    const [x, y] = canvasCoords(e);
-    applyToolAt(x, y);
+  bindCanvasDrawing(document.getElementById('split-canvas'), (e) => {
+    const parts = getPartsUV(skinModel);
+    const f = parts[activePart][activeLayer][activeFace];
+    const canvas = document.getElementById('split-canvas');
+    const r = canvas.getBoundingClientRect();
+    const lx = Math.max(0, Math.min(f.w - 1, Math.floor((e.clientX - r.left) * f.w / r.width)));
+    const ly = Math.max(0, Math.min(f.h - 1, Math.floor((e.clientY - r.top) * f.h / r.height)));
+    return { mode: 'split', px: f.x + lx, py: f.y + ly, lx, ly, bounds: f };
   });
-  skinCanvas.addEventListener('pointermove', (e) => {
-    const [x, y] = canvasCoords(e);
-    hoverPt = [x, y];
-    const z = zoneAt(x, y);
-    document.getElementById('hover-info').textContent = 'X:' + x + ' Y:' + y + (z ? '  ' + z.name : '');
-    renderGuides();
-    if (drawing && (tool === 'pencil' || tool === 'eraser')) applyToolAt(x, y);
+
+  bindCanvasDrawing(document.getElementById('uv-canvas'), (e) => {
+    const canvas = document.getElementById('uv-canvas');
+    const r = canvas.getBoundingClientRect();
+    const px = Math.max(0, Math.min(63, Math.floor((e.clientX - r.left) * 64 / r.width)));
+    const py = Math.max(0, Math.min(63, Math.floor((e.clientY - r.top) * 64 / r.height)));
+    return { mode: 'uv', px, py, lx: px, ly: py, bounds: { x: 0, y: 0, w: 64, h: 64 } };
   });
-  skinCanvas.addEventListener('pointerup', () => {
-    if (drawing && (tool === 'pencil' || tool === 'eraser')) pushSnapshot();
-    drawing = false;
-    lastPt = null;
+
+  function loadImageDataUrl(dataUrl, model, name, markDirty) {
+    const img = new Image();
+    img.onload = () => {
+      skinCtx.clearRect(0, 0, 64, 64);
+      skinCtx.imageSmoothingEnabled = false;
+      if (img.width === 64 && img.height === 32) {
+        skinCtx.drawImage(img, 0, 0);
+      } else {
+        skinCtx.drawImage(img, 0, 0, 64, 64);
+      }
+      if (model === 'slim' || model === 'default') {
+        skinModel = model;
+        document.getElementById('skin-model').value = model;
+      }
+      if (name) document.getElementById('save-name').value = name;
+      undoStack = []; redoStack = [];
+      syncHistoryButtons();
+      setDirty(!!markDirty);
+      renderEditorViews();
+      pushPreview3D();
+    };
+    img.src = dataUrl;
+  }
+
+  async function loadSkinFromHash(hash, name, model) {
+    try {
+      const res = await callHost('getTextureDataUrl', { hash });
+      if (res && res.dataUrl) {
+        loadImageDataUrl(res.dataUrl, model === 'slim' ? 'slim' : 'default', (name || '皮肤') + '（编辑）', false);
+      }
+    } catch {
+      setMsg('无法加载当前皮肤图像', 'err');
+    }
+  }
+
+  function setTool(nextTool) {
+    tool = nextTool;
+    for (const btn of document.querySelectorAll('button.tool')) {
+      btn.classList.toggle('active', btn.dataset.tool === nextTool);
+    }
+    document.getElementById('wrap-shade-dark').hidden = nextTool !== 'shade';
+  }
+
+  document.querySelectorAll('button.tool').forEach(btn => {
+    btn.addEventListener('click', () => setTool(btn.dataset.tool));
   });
-  skinCanvas.addEventListener('pointerleave', () => { hoverPt = null; renderGuides(); });
+
+  function undo() {
+    if (undoStack.length === 0) return;
+    redoStack.push(captureSnapshot());
+    skinCtx.putImageData(undoStack.pop(), 0, 0);
+    syncHistoryButtons();
+    renderEditorViews();
+    pushPreview3D();
+  }
+  function redo() {
+    if (redoStack.length === 0) return;
+    undoStack.push(captureSnapshot());
+    skinCtx.putImageData(redoStack.pop(), 0, 0);
+    syncHistoryButtons();
+    renderEditorViews();
+    pushPreview3D();
+  }
+  document.getElementById('btn-undo').addEventListener('click', undo);
+  document.getElementById('btn-redo').addEventListener('click', redo);
 
   window.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
-    else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) { e.preventDefault(); redo(); }
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) redo(); else undo();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+    const map = { b: 'brush', e: 'eraser', i: 'eyedropper', g: 'fill', l: 'line', r: 'rect', s: 'shade' };
+    const t = map[e.key.toLowerCase()];
+    if (t) setTool(t);
   });
 
-  document.getElementById('undo-btn').addEventListener('click', undo);
-  document.getElementById('redo-btn').addEventListener('click', redo);
-  document.getElementById('opt-grid').addEventListener('change', renderGuides);
-  document.getElementById('opt-uv').addEventListener('change', renderGuides);
-  document.getElementById('prev-outer').addEventListener('change', renderPreviews);
-  document.getElementById('model-select').addEventListener('change', renderPreviews);
-  document.getElementById('save-name').addEventListener('input', renderPreviews);
-  document.getElementById('equip-char').addEventListener('change', (e) => {
-    document.getElementById('equip-btn').disabled = !e.target.value;
+  document.getElementById('mode-split-btn').addEventListener('click', () => {
+    mode = 'split';
+    document.getElementById('mode-split-btn').classList.add('active');
+    document.getElementById('mode-uv-btn').classList.remove('active');
+    document.getElementById('split-panel').hidden = false;
+    document.getElementById('uv-panel').hidden = true;
+    document.getElementById('wrap-ghost').hidden = false;
+    document.getElementById('wrap-uvlabels').hidden = true;
+    renderEditorViews();
   });
-  document.getElementById('source-select').addEventListener('change', (e) => {
-    const val = e.target.value;
-    if (val.startsWith('tpl:')) {
-      const tpl = templates.find(t => t.id === val.slice(4));
-      if (tpl) {
-        document.getElementById('model-select').value = tpl.model || 'default';
-        void loadImageDataUrl('data:image/png;base64,' + tpl.pngBase64);
-      }
-    } else if (val.startsWith('hash:')) {
-      const [, hash, mdl] = val.split(':');
-      document.getElementById('model-select').value = mdl === 'slim' ? 'slim' : 'default';
-      void loadHashIntoCanvas(hash);
+
+  document.getElementById('mode-uv-btn').addEventListener('click', () => {
+    mode = 'uv';
+    document.getElementById('mode-uv-btn').classList.add('active');
+    document.getElementById('mode-split-btn').classList.remove('active');
+    document.getElementById('split-panel').hidden = true;
+    document.getElementById('uv-panel').hidden = false;
+    document.getElementById('wrap-ghost').hidden = true;
+    document.getElementById('wrap-uvlabels').hidden = false;
+    renderEditorViews();
+  });
+
+  document.getElementById('part-tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-part]');
+    if (!b) return;
+    activePart = b.dataset.part;
+    document.querySelectorAll('#part-tabs button').forEach(x => x.classList.toggle('active', x === b));
+    renderEditorViews();
+  });
+
+  document.getElementById('layer-tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-layer]');
+    if (!b) return;
+    activeLayer = b.dataset.layer;
+    document.querySelectorAll('#layer-tabs button').forEach(x => x.classList.toggle('active', x === b));
+    renderEditorViews();
+  });
+
+  for (const id of ['chk-grid', 'chk-ghost', 'chk-labels', 'uv-zoom']) {
+    document.getElementById(id).addEventListener('change', renderEditorViews);
+  }
+
+  document.getElementById('skin-model').addEventListener('change', (e) => {
+    skinModel = e.target.value === 'slim' ? 'slim' : 'default';
+    renderEditorViews();
+    pushPreview3D();
+  });
+
+  document.getElementById('color-picker').addEventListener('input', (e) => setColor(e.target.value));
+
+  document.getElementById('clear-layer-btn').addEventListener('click', () => {
+    pushUndoSnapshot(captureSnapshot());
+    skinCtx.clearRect(32, 0, 32, 16);
+    skinCtx.clearRect(0, 32, 56, 16);
+    skinCtx.clearRect(0, 48, 16, 16);
+    skinCtx.clearRect(48, 48, 16, 16);
+    setDirty(true);
+    renderEditorViews();
+    pushPreview3D();
+  });
+
+  document.getElementById('pick-site-btn').addEventListener('click', async () => {
+    try {
+      const picked = await callHost('pickTexture', { kind: 'skin' });
+      if (!picked || picked.cancelled) return;
+      loadImageDataUrl(picked.dataUrl, picked.model === 'slim' ? 'slim' : 'default', (picked.name || '皮肤') + '（编辑）', false);
+    } catch (err) {
+      if (err && err.status === 499) return;
+      setMsg((err && err.message) || '无法打开站点皮肤选择器', 'err');
     }
   });
+
   document.getElementById('local-file').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const r = new FileReader();
-    r.onload = () => void loadImageDataUrl(String(r.result || ''));
-    r.readAsDataURL(file);
+    const reader = new FileReader();
+    reader.onload = () => loadImageDataUrl(reader.result, skinModel, file.name.replace(/\.png$/i, ''), true);
+    reader.readAsDataURL(file);
   });
-  document.getElementById('save-btn').addEventListener('click', () => void saveResult(false));
-  document.getElementById('equip-btn').addEventListener('click', () => void saveResult(true));
+
+  document.getElementById('tpl-select').addEventListener('change', (e) => {
+    const id = e.target.value;
+    if (!id) return;
+    const tpl = templatesCache.find(t => t.id === id);
+    if (tpl) {
+      loadImageDataUrl('data:image/png;base64,' + tpl.pngBase64, tpl.model === 'slim' ? 'slim' : 'default', tpl.name, false);
+    }
+    e.target.value = '';
+  });
+
+  document.getElementById('dl-btn').addEventListener('click', () => {
+    const a = document.createElement('a');
+    a.href = skinCanvas.toDataURL('image/png');
+    a.download = (document.getElementById('save-name').value.trim() || 'skin') + '.png';
+    a.click();
+  });
+
+  document.getElementById('save-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true; btn.textContent = '保存中…';
+    setMsg('', '');
+    try {
+      const b64 = skinCanvas.toDataURL('image/png');
+      const saved = await callHost('saveTexture', {
+        kind: 'skin',
+        name: document.getElementById('save-name').value.trim() || '我的原创皮肤',
+        model: skinModel,
+        pngBase64: b64
+      });
+      const recId = saved && (saved.id || (saved.record && saved.record.id));
+      const charId = Number(document.getElementById('save-char').value) || 0;
+      const pending = !!(saved && (saved.pendingReview || (saved.record && saved.record.reviewState === 'pending')));
+      if (charId > 0 && recId && !pending) {
+        await callHost('applyTexture', {
+          characterId: charId,
+          kind: 'skin',
+          recordId: recId,
+          model: skinModel
+        });
+        setMsg('已保存到衣柜并穿戴到所选角色！', 'ok');
+      } else if (pending) {
+        setMsg('皮肤已提交保存，等待管理员审核后生效。', 'ok');
+      } else {
+        setMsg('皮肤已成功保存到我的材质库！', 'ok');
+      }
+      setDirty(false);
+      callHost('notify', { message: document.getElementById('editor-msg').textContent, kind: 'success' }).catch(() => {});
+    } catch (err) {
+      setMsg((err && err.message) || '保存失败', 'err');
+    } finally {
+      btn.disabled = false; btn.textContent = '保存到皮肤库';
+    }
+  });
+
+  async function init() {
+    renderSwatches();
+    const [tplRes, charData] = await Promise.all([
+      callPlugin('GET', '/templates').catch(() => null),
+      callHost('listCharacters').catch(() => ({ characters: [] }))
+    ]);
+
+    if (tplRes && tplRes.status === 200 && tplRes.body && Array.isArray(tplRes.body.templates)) {
+      templatesCache = tplRes.body.templates;
+      const tplSel = document.getElementById('tpl-select');
+      for (const t of templatesCache) {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        tplSel.appendChild(opt);
+      }
+      if (!loadedFromHostHash && templatesCache.length > 0) {
+        const first = templatesCache[0];
+        loadImageDataUrl('data:image/png;base64,' + first.pngBase64, first.model === 'slim' ? 'slim' : 'default', '我的原创皮肤', false);
+      }
+    }
+
+    const charSel = document.getElementById('save-char');
+    charSel.innerHTML = '<option value="0">仅保存到我的材质库</option>';
+    for (const c of (charData && charData.characters) || []) {
+      const opt = document.createElement('option');
+      opt.value = String(c.id);
+      opt.textContent = c.name + (c.model === 'slim' ? '（纤细）' : '（经典）');
+      charSel.appendChild(opt);
+    }
+
+    renderEditorViews();
+  }
 
   void init();
 })();

@@ -7,116 +7,143 @@
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #fafafa;
+    --bg: transparent;
     --panel: #ffffff;
     --subtle: #f4f4f6;
     --ink: #18181b;
     --muted: #52525b;
     --border: #e4e4e7;
     --accent: #2563eb;
+    --accent-hover: #1d4ed8;
     --accent-soft: rgba(37, 99, 235, 0.12);
-    --radius: 10px;
+    --btn-text: #ffffff;
+    --ok: #15803d;
+    --danger: #b91c1c;
+    --radius: 12px;
+    --radius-ctl: 9px;
+    --shadow: none;
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: var(--font-sans);
   }
   :root[data-theme="dark"] {
-    --bg: #111113;
     --panel: #18181b;
     --subtle: #202024;
     --ink: #f4f4f5;
     --muted: #a1a1aa;
     --border: #2e2e34;
     --accent: #60a5fa;
-    --accent-soft: rgba(96, 165, 250, 0.14);
+    --accent-hover: #3b82f6;
+    --ok: #4ade80;
+    --danger: #f87171;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 16px; font: 14px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
-  .layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(290px, 0.9fr); gap: 16px; align-items: start; }
-  @media (max-width: 780px) { .layout { grid-template-columns: 1fr; } }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: grid; gap: 14px; }
-  h2 { margin: 0; font-size: 15px; font-weight: 600; }
-  h3 { margin: 0; font-size: 13px; color: var(--muted); font-weight: 600; }
-  .field { display: grid; gap: 6px; }
-  .field label { font-size: 12px; color: var(--muted); font-weight: 600; }
-  select, input[type="text"], button {
-    font: inherit; min-height: 36px; border-radius: 8px; border: 1px solid var(--border);
-    background: var(--panel); color: var(--ink); padding: 6px 10px;
-  }
-  button { cursor: pointer; font-weight: 500; transition: border-color 150ms ease; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button:hover:not(:disabled) { border-color: var(--accent); }
+  body { margin: 0; padding: 4px; background: transparent; color: var(--ink); font: 14px/1.55 var(--font-sans); }
+  .layout { display: grid; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); display: grid; gap: 12px; }
+  h2 { margin: 0; font-size: 16px; font-weight: 600; font-family: var(--font-display); }
+  .sub { margin: 0; font-size: 13px; color: var(--muted); }
+  .split { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr); gap: 14px; align-items: start; }
+  @media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  label.field { display: grid; gap: 5px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  select, input[type="text"], button { font: inherit; min-height: 36px; border-radius: var(--radius-ctl); border: 1px solid var(--border); background: var(--panel); color: var(--ink); padding: 6px 10px; }
+  button { cursor: pointer; font-weight: 500; transition: background-color 140ms ease, border-color 140ms ease; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--btn-text); }
+  button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
   button:disabled { opacity: 0.55; cursor: not-allowed; }
-  .overlay-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; }
-  .overlay-card {
-    border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--subtle);
-    display: grid; gap: 6px; justify-items: center; text-align: center; cursor: pointer;
-  }
-  .overlay-card.selected { border-color: var(--accent); background: var(--accent-soft); }
-  .overlay-card img { width: 48px; height: 96px; image-rendering: pixelated; }
-  .overlay-card strong { font-size: 12px; }
-  .overlay-card span { font-size: 11px; color: var(--muted); }
-  .preview-box {
-    display: flex; justify-content: center; gap: 20px; padding: 18px;
-    border-radius: 8px; border: 1px solid var(--border); background: var(--subtle); min-height: 224px; align-items: center;
-  }
-  .preview-box img { width: 96px; height: 192px; image-rendering: pixelated; }
-  .checks { display: grid; gap: 8px; }
-  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
-  .status { font-size: 12px; color: var(--muted); margin: 0; }
-  .range-row { display: flex; align-items: center; gap: 10px; }
-  .range-row input { flex: 1; }
+  .source-pill { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--radius-ctl); background: var(--subtle); border: 1px solid var(--border); font-size: 13px; }
+  .source-pill img { width: 32px; height: 32px; image-rendering: pixelated; border-radius: 5px; border: 1px solid var(--border); }
+  .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; }
+  .ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+  .ov-card { display: grid; gap: 8px; padding: 10px; border-radius: var(--radius-ctl); border: 1px solid var(--border); background: var(--subtle); cursor: pointer; transition: border-color 140ms ease, background-color 140ms ease; }
+  .ov-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+  .ov-top { display: flex; align-items: center; gap: 10px; }
+  .ov-top img { width: 32px; height: 64px; image-rendering: pixelated; border-radius: 6px; background: var(--panel); border: 1px solid var(--border); }
+  .ov-meta { display: grid; gap: 2px; min-width: 0; }
+  .ov-meta strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ov-meta small { font-size: 12px; color: var(--muted); }
+  .dolls { display: flex; gap: 14px; justify-content: center; align-items: flex-end; padding: 14px; border-radius: var(--radius-ctl); background: var(--subtle); border: 1px solid var(--border); }
+  .doll { display: grid; gap: 4px; text-align: center; font-size: 11px; color: var(--muted); }
+  .doll img { width: 80px; height: 160px; image-rendering: pixelated; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; cursor: pointer; }
+  .check input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .msg { font-size: 13px; margin: 0; color: var(--muted); }
+  .msg.ok { color: var(--ok); font-weight: 500; }
+  .msg.err { color: var(--danger); font-weight: 500; }
+  input[type="file"] { display: none; }
 </style>
 </head>
 <body>
 <div class="layout">
-  <div class="card">
-    <div class="field">
-      <label for="base-skin">选择基础皮肤</label>
-      <select id="base-skin"></select>
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h2>皮肤装扮叠层</h2>
+        <p class="sub">先挑选基础皮肤，再选择装扮叠层（支持冬日红围巾示例或管理员自定义饰品），可随时在右侧 3D 预览效果。</p>
+      </div>
+      <div id="cost-badges" class="row"></div>
     </div>
 
-    <div class="checks">
-      <label class="check"><input id="opt-upgrade" type="checkbox" checked /> 自动将 64×32 旧版皮肤升级为 64×64</label>
-      <label class="check"><input id="opt-clear-hat" type="checkbox" /> 清除原有头饰外层后再叠加</label>
-    </div>
-
-    <div class="field">
-      <label>选择装饰叠层（<span id="layer-hint">最多 3 层</span>）</label>
-      <div id="overlay-grid" class="overlay-grid"></div>
-    </div>
-
-    <div class="field">
-      <label for="opt-opacity">装饰不透明度：<span id="opacity-val">100%</span></label>
-      <div class="range-row"><input id="opt-opacity" type="range" min="20" max="100" value="100" /></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>实时合成预览</h2>
-    <div id="preview-box" class="preview-box">
-      <p class="status">选择皮肤和至少一层装扮即可预览。</p>
-    </div>
-
-    <div class="field">
-      <label for="save-name">新皮肤名称</label>
-      <input id="save-name" type="text" maxlength="255" placeholder="例如：圣诞节日皮肤" />
-    </div>
-
-    <div class="field">
-      <label for="save-model">手臂模型</label>
-      <select id="save-model">
-        <option value="default">标准手臂 (Steve)</option>
-        <option value="slim">纤细手臂 (Alex)</option>
+    <div class="row">
+      <button id="pick-site-btn" class="primary" type="button">从站点皮肤库选择</button>
+      <label for="local-file" style="cursor:pointer"><span style="display:inline-flex;align-items:center;min-height:36px;padding:6px 12px;border-radius:var(--radius-ctl);border:1px solid var(--border);background:var(--panel);font-weight:500">上传本地 PNG</span></label>
+      <input id="local-file" type="file" accept="image/png" />
+      <select id="model-select">
+        <option value="default">经典手臂（Steve 4px）</option>
+        <option value="slim">纤细手臂（Alex 3px）</option>
       </select>
     </div>
 
-    <div class="field">
-      <label for="equip-char">保存后自动穿戴到角色（可选）</label>
-      <select id="equip-char"><option value="">仅保存到我的材质</option></select>
+    <div id="source-pill" class="source-pill" hidden>
+      <img id="source-thumb" alt="当前基础皮肤" />
+      <div style="flex:1;min-width:0">
+        <strong id="source-name" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></strong>
+        <span id="source-info" class="sub" style="font-size:12px"></span>
+      </div>
     </div>
+  </section>
 
-    <label id="public-wrap" class="check" hidden><input id="save-public" type="checkbox" /> 公开这份新合成皮肤</label>
-    <p id="fee-note" class="status" hidden></p>
-    <button id="apply-btn" class="primary" type="button" disabled>生成并保存</button>
-    <p id="result-note" class="status"></p>
+  <div class="split">
+    <section class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2>选择装饰叠层</h2>
+        <span id="layer-count" class="sub">已选 0 层</span>
+      </div>
+      <div class="row">
+        <label class="check"><input id="opt-upgrade" type="checkbox" checked /> 自动将 64×32 旧版皮肤升级为 64×64</label>
+        <label class="check"><input id="opt-clear-hat" type="checkbox" /> 叠加前清空原皮肤头饰外层</label>
+      </div>
+      <div id="overlays-grid" class="ov-grid"></div>
+      <p id="ov-msg" class="msg"></p>
+    </section>
+
+    <section class="card">
+      <h2>合成效果与保存穿戴</h2>
+      <div id="preview-area" hidden>
+        <div class="dolls">
+          <div class="doll"><img id="prev-front" alt="正面预览" /><span>正面立绘</span></div>
+          <div class="doll"><img id="prev-back" alt="背面预览" /><span>背面立绘</span></div>
+        </div>
+      </div>
+      <p id="preview-empty" class="sub">请先选择基础皮肤并勾选至少一个装饰叠层以查看效果。</p>
+
+      <form id="apply-form" style="display:grid;gap:10px">
+        <label class="field">新皮肤名称
+          <input id="save-name" type="text" maxlength="255" required value="装扮合成皮肤" />
+        </label>
+        <label class="field">直接穿戴到角色（可选）
+          <select id="save-char"><option value="0">仅保存至我的材质库</option></select>
+        </label>
+        <label id="public-wrap" class="check" hidden>
+          <input id="save-public" type="checkbox" /> 设为公开皮肤
+        </label>
+        <div class="row">
+          <button id="apply-btn" class="primary" type="submit" disabled>合成并保存</button>
+          <a id="dl-link" download="overlay-skin.png" hidden><button type="button">下载 PNG</button></a>
+          <span id="apply-msg" class="msg"></span>
+        </div>
+      </form>
+    </section>
   </div>
 </div>
 
@@ -126,39 +153,75 @@
   const hostMap = new Map();
   let seq = 0;
 
-  let skins = [];
-  let characters = [];
-  let overlays = [];
-  let selectedLayers = [];
-  let maxLayers = 3;
-  let pointsCost = 0;
-  let preselectedTexture = null;
+  let baseSkin = null; // { fileHash?, pngBase64?, name, model, dataUrl? }
+  let overlayMeta = { maxLayers: 3, pointsCost: 0, allowPublicSave: false };
+  let availableOverlays = [];
+  let selectedLayers = new Map(); // id -> opacity
+  let lastResult = null;
+  let dirty = false;
+
+  function postResize() {
+    window.parent.postMessage({
+      type: 'wishingskin:resize',
+      height: Math.max(300, Math.ceil(document.documentElement.scrollHeight))
+    }, '*');
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(postResize).observe(document.documentElement);
+  }
+  window.addEventListener('load', postResize);
+
+  function applyHostContext(ctx) {
+    if (!ctx || typeof ctx !== 'object') return;
+    document.documentElement.dataset.theme = ctx.theme === 'dark' ? 'dark' : 'light';
+    if (ctx.tokens && typeof ctx.tokens === 'object') {
+      const s = document.documentElement.style;
+      const map = {
+        panel: '--panel', subtle: '--subtle', ink: '--ink', muted: '--muted', border: '--border',
+        accent: '--accent', accentHover: '--accent-hover', accentSoft: '--accent-soft',
+        buttonText: '--btn-text', error: '--danger', errorBg: '--danger-bg',
+        radiusCard: '--radius', radiusControl: '--radius-ctl', shadowCard: '--shadow',
+        fontSans: '--font-sans', fontDisplay: '--font-display'
+      };
+      for (const [k, cssVar] of Object.entries(map)) {
+        if (typeof ctx.tokens[k] === 'string' && ctx.tokens[k]) s.setProperty(cssVar, ctx.tokens[k]);
+      }
+    }
+    if (typeof ctx.fontFaceCss === 'string') {
+      let el = document.getElementById('ws-host-fonts');
+      if (!el) { el = document.createElement('style'); el.id = 'ws-host-fonts'; document.head.appendChild(el); }
+      el.textContent = ctx.fontFaceCss;
+    }
+    if (!baseSkin && ctx.textureHash) {
+      setSourceSkin({
+        fileHash: ctx.textureHash,
+        name: ctx.textureName || '当前皮肤',
+        model: ctx.textureModel === 'slim' ? 'slim' : 'default'
+      });
+    }
+    requestAnimationFrame(postResize);
+  }
 
   window.addEventListener('message', (event) => {
     const msg = event.data;
     if (!msg || typeof msg !== 'object') return;
-    if (msg.type === 'wishingskin:context' && msg.context) {
-      document.documentElement.dataset.theme = msg.context.theme === 'dark' ? 'dark' : 'light';
-      if (msg.context.texture && msg.context.texture.fileHash) {
-        preselectedTexture = msg.context.texture;
-        applyContextTexture();
-      }
-      return;
-    }
+    if (msg.type === 'wishingskin:context' && msg.context) { applyHostContext(msg.context); return; }
     if (msg.type === 'wishingskin:response' && reqMap.has(msg.id)) {
       const h = reqMap.get(msg.id); reqMap.delete(msg.id); clearTimeout(h.t);
       h.resolve({ status: msg.status, body: msg.body });
+      return;
     }
-    if (msg.type === 'wishingskin:host-response' && hostMap.has(msg.id)) {
+    if (msg.type === 'wishingskin:host_result' && hostMap.has(msg.id)) {
       const h = hostMap.get(msg.id); hostMap.delete(msg.id); clearTimeout(h.t);
-      h.resolve(msg);
+      if (msg.ok) h.resolve(msg.data);
+      else h.reject(Object.assign(new Error(msg.error || '操作失败'), { status: msg.status }));
     }
   });
 
   function callPlugin(method, path, body) {
     const id = 'ov-' + (++seq);
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, 15000);
+      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, 12000);
       reqMap.set(id, { resolve, reject, t });
       window.parent.postMessage({ type: 'wishingskin:request', id, method, path, body }, '*');
     });
@@ -167,173 +230,280 @@
   function callHost(action, payload) {
     const id = 'ovh-' + (++seq);
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => { hostMap.delete(id); reject(new Error('宿主响应超时')); }, 15000);
+      const t = setTimeout(() => { hostMap.delete(id); reject(new Error('宿主响应超时')); }, 60000);
       hostMap.set(id, { resolve, reject, t });
       window.parent.postMessage({ type: 'wishingskin:host', id, action, payload }, '*');
     });
   }
 
-  function applyContextTexture() {
-    if (!preselectedTexture) return;
-    const sel = document.getElementById('base-skin');
-    if (Array.from(sel.options).some(o => o.value === preselectedTexture.fileHash)) {
-      sel.value = preselectedTexture.fileHash;
-    }
-    document.getElementById('save-model').value = preselectedTexture.model === 'slim' ? 'slim' : 'default';
-    if (!document.getElementById('save-name').value) {
-      document.getElementById('save-name').value = (preselectedTexture.name || '我的皮肤') + ' 装扮版';
-    }
-    void refreshPreview();
+  function setDirty(next) {
+    const val = !!next;
+    if (dirty === val) return;
+    dirty = val;
+    callHost('setDirty', { dirty: val }).catch(() => {});
   }
 
-  function renderOverlays() {
-    const grid = document.getElementById('overlay-grid');
+  function setSourceSkin(skin) {
+    baseSkin = skin;
+    document.getElementById('model-select').value = skin.model === 'slim' ? 'slim' : 'default';
+    document.getElementById('save-name').value = (skin.name || '皮肤') + '（装扮）';
+    const pill = document.getElementById('source-pill');
+    pill.hidden = false;
+    document.getElementById('source-name').textContent = skin.name || '已选择基础皮肤';
+    document.getElementById('source-info').textContent = skin.model === 'slim' ? 'Alex (3px)' : 'Steve (4px)';
+    if (skin.dataUrl) {
+      document.getElementById('source-thumb').src = skin.dataUrl;
+      document.getElementById('source-thumb').hidden = false;
+      callHost('setPreview', {
+        pngBase64: skin.dataUrl,
+        model: skin.model === 'slim' ? 'slim' : 'default',
+        title: '装扮叠层 3D 预览'
+      }).catch(() => {});
+    } else {
+      document.getElementById('source-thumb').hidden = true;
+    }
+    void updatePreview();
+  }
+
+  function renderOverlayCards() {
+    const grid = document.getElementById('overlays-grid');
     grid.innerHTML = '';
-    for (const ov of overlays) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      const idx = selectedLayers.indexOf(ov.id);
-      btn.className = 'overlay-card' + (idx >= 0 ? ' selected' : '');
-      const img = document.createElement('img');
-      if (ov.previewDataUrl) img.src = ov.previewDataUrl;
-      img.alt = ov.name;
-      const title = document.createElement('strong');
-      title.textContent = idx >= 0 ? '#' + (idx + 1) + ' ' + ov.name : ov.name;
-      const cat = document.createElement('span');
-      cat.textContent = ov.category || '装饰';
-      btn.append(img, title, cat);
-      btn.addEventListener('click', () => {
-        const pos = selectedLayers.indexOf(ov.id);
-        if (pos >= 0) selectedLayers.splice(pos, 1);
-        else if (selectedLayers.length < maxLayers) selectedLayers.push(ov.id);
-        else { void callHost('notify', { message: '单次最多选择 ' + maxLayers + ' 层装扮', kind: 'error' }); return; }
-        renderOverlays();
-        void refreshPreview();
-      });
-      grid.appendChild(btn);
+    document.getElementById('layer-count').textContent = '已选 ' + selectedLayers.size + ' / ' + (overlayMeta.maxLayers || 3) + ' 层';
+
+    if (availableOverlays.length === 0) {
+      grid.innerHTML = '<p class="sub">当前没有已启用的装饰叠层，请联系管理员上传自定义叠层。</p>';
+      requestAnimationFrame(postResize);
+      return;
     }
+
+    for (const ov of availableOverlays) {
+      const card = document.createElement('div');
+      const isSelected = selectedLayers.has(ov.id);
+      card.className = 'ov-card' + (isSelected ? ' selected' : '');
+
+      const top = document.createElement('div');
+      top.className = 'ov-top';
+      const img = document.createElement('img');
+      img.src = ov.previewDataUrl;
+      img.alt = ov.name;
+      const meta = document.createElement('div');
+      meta.className = 'ov-meta';
+      const strong = document.createElement('strong');
+      strong.textContent = ov.name;
+      const small = document.createElement('small');
+      small.textContent = ov.category || '装饰';
+      meta.append(strong, small);
+      top.append(img, meta);
+      card.appendChild(top);
+
+      if (isSelected) {
+        const range = document.createElement('input');
+        range.type = 'range';
+        range.min = '0.2';
+        range.max = '1';
+        range.step = '0.1';
+        range.value = String(selectedLayers.get(ov.id) || 1);
+        range.addEventListener('click', (e) => e.stopPropagation());
+        range.addEventListener('input', (e) => {
+          e.stopPropagation();
+          selectedLayers.set(ov.id, Number(range.value));
+          void updatePreview();
+        });
+        card.appendChild(range);
+      }
+
+      card.addEventListener('click', () => {
+        const msgEl = document.getElementById('ov-msg');
+        msgEl.textContent = '';
+        if (selectedLayers.has(ov.id)) {
+          selectedLayers.delete(ov.id);
+        } else {
+          if (selectedLayers.size >= (overlayMeta.maxLayers || 3)) {
+            msgEl.className = 'msg err';
+            msgEl.textContent = '单次最多只能叠加 ' + (overlayMeta.maxLayers || 3) + ' 个装饰层。';
+            return;
+          }
+          selectedLayers.set(ov.id, 1.0);
+        }
+        renderOverlayCards();
+        void updatePreview();
+      });
+
+      grid.appendChild(card);
+    }
+    requestAnimationFrame(postResize);
   }
 
-  async function refreshPreview() {
-    const fileHash = document.getElementById('base-skin').value;
-    const box = document.getElementById('preview-box');
+  async function updatePreview() {
     const applyBtn = document.getElementById('apply-btn');
-    if (!fileHash || selectedLayers.length === 0) {
-      box.innerHTML = '<p class="status">选择皮肤和至少一层装扮即可预览。</p>';
+    const prevArea = document.getElementById('preview-area');
+    const emptyEl = document.getElementById('preview-empty');
+    const dlLink = document.getElementById('dl-link');
+    const ovMsg = document.getElementById('ov-msg');
+    ovMsg.textContent = '';
+
+    if (!baseSkin || selectedLayers.size === 0) {
+      lastResult = null;
+      prevArea.hidden = true;
+      emptyEl.hidden = false;
       applyBtn.disabled = true;
+      dlLink.hidden = true;
+      setDirty(false);
+      requestAnimationFrame(postResize);
       return;
     }
-    const op = Number(document.getElementById('opt-opacity').value) / 100;
-    const res = await callPlugin('POST', '/preview', {
-      fileHash,
-      model: document.getElementById('save-model').value,
-      upgradeLegacy: document.getElementById('opt-upgrade').checked,
-      clearHat: document.getElementById('opt-clear-hat').checked,
-      layers: selectedLayers.map(id => ({ id, opacity: op }))
-    });
-    if (res.status !== 200) {
-      box.innerHTML = '';
-      const p = document.createElement('p');
-      p.className = 'status';
-      p.textContent = (res.body && res.body.error) || '无法生成预览';
-      box.appendChild(p);
-      applyBtn.disabled = true;
-      return;
+
+    const layers = [...selectedLayers.entries()].map(([id, opacity]) => ({ id, opacity }));
+    try {
+      const res = await callPlugin('POST', '/preview', {
+        fileHash: baseSkin.fileHash || '',
+        pngBase64: baseSkin.pngBase64 || '',
+        model: document.getElementById('model-select').value,
+        upgradeLegacy: document.getElementById('opt-upgrade').checked,
+        clearHat: document.getElementById('opt-clear-hat').checked,
+        layers
+      });
+      if (res.status !== 200) {
+        ovMsg.className = 'msg err';
+        ovMsg.textContent = (res.body && res.body.error) || '生成预览失败';
+        applyBtn.disabled = true;
+        return;
+      }
+      lastResult = res.body;
+      prevArea.hidden = false;
+      emptyEl.hidden = true;
+      applyBtn.disabled = false;
+      document.getElementById('prev-front').src = 'data:image/png;base64,' + lastResult.frontPreviewBase64;
+      document.getElementById('prev-back').src = 'data:image/png;base64,' + lastResult.backPreviewBase64;
+      dlLink.href = 'data:image/png;base64,' + lastResult.pngBase64;
+      dlLink.hidden = false;
+
+      callHost('setPreview', {
+        pngBase64: lastResult.pngBase64,
+        model: lastResult.model === 'slim' ? 'slim' : 'default',
+        title: '装扮叠层 3D 预览'
+      }).catch(() => {});
+
+      setDirty(true);
+    } catch (err) {
+      ovMsg.className = 'msg err';
+      ovMsg.textContent = err.message || '预览失败';
     }
-    box.innerHTML = '';
-    const fImg = document.createElement('img');
-    fImg.src = 'data:image/png;base64,' + res.body.frontPreviewBase64;
-    fImg.alt = '正面预览';
-    const bImg = document.createElement('img');
-    bImg.src = 'data:image/png;base64,' + res.body.backPreviewBase64;
-    bImg.alt = '背面预览';
-    box.append(fImg, bImg);
-    applyBtn.disabled = false;
+    requestAnimationFrame(postResize);
   }
 
   async function init() {
-    const [ovRes, texRes, charRes] = await Promise.all([
+    const [ovRes, charData] = await Promise.all([
       callPlugin('GET', '/overlays'),
-      callHost('listTextures', { kind: 'skin', pageSize: 100 }),
-      callHost('listCharacters', {})
+      callHost('listCharacters').catch(() => ({ characters: [] }))
     ]);
-    if (ovRes.status === 200) {
-      overlays = ovRes.body.overlays || [];
-      maxLayers = ovRes.body.maxLayers || 3;
-      pointsCost = ovRes.body.pointsCost || 0;
-      document.getElementById('layer-hint').textContent = '最多 ' + maxLayers + ' 层';
-      document.getElementById('public-wrap').hidden = !ovRes.body.allowPublicSave;
-      if (pointsCost > 0) {
-        const fee = document.getElementById('fee-note');
-        fee.hidden = false;
-        fee.textContent = '保存合成皮肤将扣除 ' + pointsCost + ' 积分。';
+    if (ovRes.status === 200 && ovRes.body) {
+      overlayMeta = {
+        maxLayers: ovRes.body.maxLayers || 3,
+        pointsCost: ovRes.body.pointsCost || 0,
+        allowPublicSave: !!ovRes.body.allowPublicSave
+      };
+      availableOverlays = ovRes.body.overlays || [];
+      document.getElementById('public-wrap').hidden = !overlayMeta.allowPublicSave;
+
+      const badges = document.getElementById('cost-badges');
+      badges.innerHTML = '';
+      const b = document.createElement('span');
+      b.className = 'badge';
+      b.textContent = overlayMeta.pointsCost > 0 ? ('合成消耗 ' + overlayMeta.pointsCost + ' 积分') : '免费合成';
+      badges.appendChild(b);
+
+      if (availableOverlays.length === 1) {
+        selectedLayers.set(availableOverlays[0].id, 1.0);
       }
-      renderOverlays();
-    }
-    const sel = document.getElementById('base-skin');
-    sel.innerHTML = '';
-    skins = (texRes.ok && texRes.data && texRes.data.textures) ? texRes.data.textures.filter(x => !x.reviewState || x.reviewState === 'approved') : [];
-    for (const s of skins) {
-      const opt = document.createElement('option');
-      opt.value = s.fileHash;
-      opt.textContent = s.name + (s.model === 'slim' ? ' (Alex)' : ' (Steve)');
-      sel.appendChild(opt);
-    }
-    if (skins.length && !document.getElementById('save-name').value) {
-      document.getElementById('save-name').value = skins[0].name + ' 装扮版';
+      renderOverlayCards();
     }
 
-    const cSel = document.getElementById('equip-char');
-    characters = (charRes.ok && charRes.data && charRes.data.characters) ? charRes.data.characters : [];
-    for (const c of characters) {
+    const sel = document.getElementById('save-char');
+    sel.innerHTML = '<option value="0">仅保存至我的材质库</option>';
+    for (const c of (charData && charData.characters) || []) {
       const opt = document.createElement('option');
       opt.value = String(c.id);
-      opt.textContent = c.name;
-      cSel.appendChild(opt);
+      opt.textContent = c.name + (c.model === 'slim' ? '（纤细）' : '（经典）');
+      sel.appendChild(opt);
     }
-    applyContextTexture();
   }
 
-  document.getElementById('opt-opacity').addEventListener('input', (e) => {
-    document.getElementById('opacity-val').textContent = e.target.value + '%';
-  });
-  for (const id of ['base-skin', 'opt-upgrade', 'opt-clear-hat', 'opt-opacity', 'save-model']) {
-    document.getElementById(id).addEventListener('change', () => void refreshPreview());
-  }
-
-  document.getElementById('apply-btn').addEventListener('click', async () => {
-    const btn = document.getElementById('apply-btn');
-    const note = document.getElementById('result-note');
-    btn.disabled = true;
-    note.textContent = '正在合成并上传皮肤…';
+  document.getElementById('pick-site-btn').addEventListener('click', async () => {
     try {
-      const op = Number(document.getElementById('opt-opacity').value) / 100;
-      const charID = Number(document.getElementById('equip-char').value) || 0;
+      const picked = await callHost('pickTexture', { kind: 'skin' });
+      if (!picked || picked.cancelled) return;
+      setSourceSkin({
+        fileHash: picked.fileHash,
+        name: picked.name || '站点皮肤',
+        model: picked.model === 'slim' ? 'slim' : 'default',
+        dataUrl: picked.dataUrl
+      });
+    } catch (err) {
+      if (err && err.status === 499) return;
+      const msg = document.getElementById('ov-msg');
+      msg.className = 'msg err';
+      msg.textContent = (err && err.message) || '打开皮肤选择器失败';
+    }
+  });
+
+  document.getElementById('local-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSourceSkin({
+        pngBase64: reader.result,
+        name: file.name.replace(/\.png$/i, ''),
+        model: document.getElementById('model-select').value,
+        dataUrl: reader.result
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+
+  for (const id of ['model-select', 'opt-upgrade', 'opt-clear-hat']) {
+    document.getElementById(id).addEventListener('change', () => void updatePreview());
+  }
+
+  document.getElementById('apply-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!baseSkin || selectedLayers.size === 0) return;
+    const msgEl = document.getElementById('apply-msg');
+    const btn = document.getElementById('apply-btn');
+    btn.disabled = true; btn.textContent = '合成保存中…';
+    msgEl.className = 'msg'; msgEl.textContent = '';
+
+    const layers = [...selectedLayers.entries()].map(([id, opacity]) => ({ id, opacity }));
+    try {
       const res = await callPlugin('POST', '/apply', {
-        fileHash: document.getElementById('base-skin').value,
-        name: document.getElementById('save-name').value.trim() || '装扮合成皮肤',
-        model: document.getElementById('save-model').value,
-        isPublic: document.getElementById('save-public').checked,
-        characterId: charID,
+        fileHash: baseSkin.fileHash || '',
+        pngBase64: baseSkin.pngBase64 || '',
+        name: document.getElementById('save-name').value.trim(),
+        model: document.getElementById('model-select').value,
+        isPublic: !document.getElementById('public-wrap').hidden && document.getElementById('save-public').checked,
+        characterId: Number(document.getElementById('save-char').value) || 0,
         upgradeLegacy: document.getElementById('opt-upgrade').checked,
         clearHat: document.getElementById('opt-clear-hat').checked,
-        layers: selectedLayers.map(id => ({ id, opacity: op })),
-        requestId: 'ov-' + Date.now()
+        layers,
+        requestId: 'ov_' + Date.now().toString(36)
       });
       if (res.status !== 200) {
-        note.textContent = (res.body && res.body.error) || '保存失败';
-        void callHost('notify', { message: note.textContent, kind: 'error' });
+        msgEl.className = 'msg err';
+        msgEl.textContent = (res.body && res.body.error) || '合成保存失败';
         return;
       }
-      const msg = res.body.pendingReview
-        ? '皮肤已保存，正等待站点内容审核通过后方可穿戴。'
-        : res.body.bound
-          ? '新皮肤已保存并穿戴到指定角色。'
-          : '新皮肤已保存到我的材质。';
-      note.textContent = msg + (res.body.balance ? ' 当前余额：' + res.body.balance + ' 积分。' : '');
-      void callHost('notify', { message: msg, kind: 'success' });
+      setDirty(false);
+      msgEl.className = 'msg ok';
+      msgEl.textContent = res.body.pendingReview
+        ? '已保存并提交审核，审核通过后生效。'
+        : (res.body.bound ? '合成成功并已穿戴到所选角色！' : '合成成功并已保存至材质库！');
+      callHost('notify', { message: msgEl.textContent, kind: 'success' }).catch(() => {});
+    } catch (err) {
+      msgEl.className = 'msg err';
+      msgEl.textContent = err.message || '保存失败';
     } finally {
-      btn.disabled = false;
+      btn.disabled = false; btn.textContent = '合成并保存';
     }
   });
 

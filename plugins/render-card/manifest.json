@@ -8,9 +8,31 @@
     "migrationVersion": 0,
     "permissions": ["routes.public", "routes.user", "user.frontend", "host.public.read"],
     "settings": [
-      { "key": "cache_max_age", "label": "公开图片缓存秒数（0–86400，默认 300）", "type": "number" },
-      { "key": "default_theme", "label": "默认名片配色风格（light 浅色 / dark 深色 / emerald 翠绿）", "type": "text" },
-      { "key": "show_verified_badge", "label": "在玩家名片中展示正版 Minecraft 验证徽标", "type": "boolean" }
+      {
+        "key": "cache_max_age",
+        "label": "公开图片缓存秒数",
+        "type": "number",
+        "default": 300,
+        "description": "HTTP Cache-Control max-age，允许范围 0 至 86400 秒"
+      },
+      {
+        "key": "default_theme",
+        "label": "默认名片配色风格",
+        "type": "text",
+        "default": "light",
+        "description": "URL 未传 theme 参数时采用的默认风格",
+        "options": [
+          { "value": "light", "label": "浅色 (Light)" },
+          { "value": "dark", "label": "深色 (Dark)" },
+          { "value": "emerald", "label": "翠绿 (Emerald)" }
+        ]
+      },
+      {
+        "key": "show_verified_badge",
+        "label": "在玩家名片中展示正版 Minecraft 验证徽标",
+        "type": "boolean",
+        "default": true
+      }
     ]
   },
   "protocol": 2,

@@ -23,10 +23,14 @@ import (
 )
 
 const (
-	maxPromptRunes = 500
-	maxJobsRetained = 64
-	maxAuditLogs    = 50
-	jobTTL          = 15 * time.Minute
+	maxPromptRunes    = 500
+	maxJobsRetained   = 64
+	maxHistoryPerUser = 12
+	historyTTL        = 7 * 24 * time.Hour
+	histIdxPrefix     = "hist_idx:"
+	histItemPrefix    = "hist_item:"
+	maxAuditLogs      = 50
+	jobTTL            = 15 * time.Minute
 )
 
 const (
@@ -101,27 +105,62 @@ type aiJob struct {
 	Counted            bool        `json:"-"`
 }
 
+type aiHistoryItem struct {
+	ID        string      `json:"jobId"`
+	UserID    int64       `json:"userId"`
+	Engine    string      `json:"engine"`
+	Model     string      `json:"model"`
+	Prompt    string      `json:"prompt"`
+	Summary   string      `json:"summary,omitempty"`
+	Recipe    *SkinRecipe `json:"recipe,omitempty"`
+	PNGBase64 string      `json:"pngBase64"`
+	CreatedAt time.Time   `json:"createdAt"`
+	ExpiresAt time.Time   `json:"expiresAt"`
+}
+
+type aiHistoryView struct {
+	JobID              string      `json:"jobId"`
+	Engine             string      `json:"engine"`
+	Model              string      `json:"model"`
+	Prompt             string      `json:"prompt"`
+	Summary            string      `json:"summary,omitempty"`
+	Recipe             *SkinRecipe `json:"recipe,omitempty"`
+	PNGBase64          string      `json:"pngBase64"`
+	FrontPreviewBase64 string      `json:"frontPreviewBase64,omitempty"`
+	BackPreviewBase64  string      `json:"backPreviewBase64,omitempty"`
+	CreatedAt          string      `json:"createdAt"`
+	ExpiresAt          string      `json:"expiresAt"`
+}
+
 type jobManager struct {
-	mu           sync.Mutex
-	hydrated     bool
-	jobs         map[string]*aiJob
-	activeByUser map[int64]string
-	lastSubmit   map[int64]time.Time
-	dailyUsage   map[string]map[int64]int
-	stats        aiStats
-	logs         []aiAuditEntry
-	dirty        bool
+	mu             sync.Mutex
+	hydrated       bool
+	jobs           map[string]*aiJob
+	activeByUser   map[int64]string
+	lastSubmit     map[int64]time.Time
+	dailyUsage     map[string]map[int64]int
+	historyIndex   map[int64][]string
+	historyItems   map[string]*aiHistoryItem
+	dirtyHistUsers map[int64]bool
+	dirtyHistItems map[string]bool
+	stats          aiStats
+	logs           []aiAuditEntry
+	dirty          bool
 }
 
 var manager = newJobManager()
 
 func newJobManager() *jobManager {
 	return &jobManager{
-		jobs:         map[string]*aiJob{},
-		activeByUser: map[int64]string{},
-		lastSubmit:   map[int64]time.Time{},
-		dailyUsage:   map[string]map[int64]int{},
-		logs:         []aiAuditEntry{},
+		jobs:           map[string]*aiJob{},
+		activeByUser:   map[int64]string{},
+		lastSubmit:     map[int64]time.Time{},
+		dailyUsage:     map[string]map[int64]int{},
+		historyIndex:   map[int64][]string{},
+		historyItems:   map[string]*aiHistoryItem{},
+		dirtyHistUsers: map[int64]bool{},
+		dirtyHistItems: map[string]bool{},
+		logs:           []aiAuditEntry{},
 	}
 }
 
@@ -143,6 +182,10 @@ func handleRequest(ctx context.Context, req sdk.RuntimeRequest) (any, error) {
 		return routePostGenerate(ctx, cfg, req), nil
 	case req.Method == http.MethodGet && req.Path == "/jobs":
 		return routeGetJob(req), nil
+	case req.Method == http.MethodGet && req.Path == "/history":
+		return routeGetHistory(req), nil
+	case req.Method == http.MethodPost && req.Path == "/history/delete":
+		return routePostHistoryDelete(req), nil
 	case req.Method == http.MethodPost && req.Path == "/save":
 		return routePostSave(ctx, cfg, req), nil
 	case req.Method == http.MethodGet && req.Path == "/admin/status":
@@ -280,6 +323,8 @@ func routeGetConfig(ctx context.Context, cfg aiConfig, req sdk.RuntimeRequest) s
 		}
 	}
 
+	writes := manager.flushPendingWrites()
+
 	return sdk.RuntimeResponse{
 		Status: 200,
 		Body: mustJSON(map[string]any{
@@ -294,6 +339,7 @@ func routeGetConfig(ctx context.Context, cfg aiConfig, req sdk.RuntimeRequest) s
 			"allowPublicSave": cfg.AllowPublicSave,
 			"activeJobId":     activeJobID,
 		}),
+		Writes: writes,
 	}
 }
 
@@ -484,6 +530,73 @@ func routeGetJob(req sdk.RuntimeRequest) sdk.RuntimeResponse {
 	return sdk.RuntimeResponse{
 		Status: 200,
 		Body:   mustJSON(snapshot),
+		Writes: writes,
+	}
+}
+
+func routeGetHistory(req sdk.RuntimeRequest) sdk.RuntimeResponse {
+	if req.Principal.ID < 1 {
+		return errResp(401, "请先登录后查看历史生成记录")
+	}
+	items, writes := manager.listHistory(req.Principal.ID, time.Now().UTC())
+	views := make([]aiHistoryView, 0, len(items))
+	for _, item := range items {
+		v := aiHistoryView{
+			JobID:     item.ID,
+			Engine:    item.Engine,
+			Model:     item.Model,
+			Prompt:    item.Prompt,
+			Summary:   item.Summary,
+			Recipe:    item.Recipe,
+			PNGBase64: item.PNGBase64,
+			CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339),
+			ExpiresAt: item.ExpiresAt.UTC().Format(time.RFC3339),
+		}
+		if rawPNG, err := base64.StdEncoding.DecodeString(item.PNGBase64); err == nil {
+			if img, err := skinpng.DecodePNG(rawPNG); err == nil {
+				slim := item.Model == "slim"
+				if fb, err := skinpng.EncodePNG(skinpng.RenderBodyFront(img, 5, slim, true)); err == nil {
+					v.FrontPreviewBase64 = base64.StdEncoding.EncodeToString(fb)
+				}
+				if bb, err := skinpng.EncodePNG(skinpng.RenderBodyBack(img, 5, slim, true)); err == nil {
+					v.BackPreviewBase64 = base64.StdEncoding.EncodeToString(bb)
+				}
+			}
+		}
+		views = append(views, v)
+	}
+	return sdk.RuntimeResponse{
+		Status: 200,
+		Body:   mustJSON(map[string]any{"items": views}),
+		Writes: writes,
+	}
+}
+
+func routePostHistoryDelete(req sdk.RuntimeRequest) sdk.RuntimeResponse {
+	if req.Principal.ID < 1 {
+		return errResp(401, "请先登录后操作")
+	}
+	var body struct {
+		JobID string `json:"jobId"`
+		ID    string `json:"id"`
+	}
+	if err := json.Unmarshal(req.Body, &body); err != nil {
+		return errResp(400, "请求参数无效")
+	}
+	jobID := strings.TrimSpace(body.JobID)
+	if jobID == "" {
+		jobID = strings.TrimSpace(body.ID)
+	}
+	if jobID == "" {
+		return errResp(400, "缺少记录 id")
+	}
+	writes, status, msg := manager.deleteHistoryItem(jobID, req.Principal.ID, req.Principal.Admin)
+	if status != 0 {
+		return errResp(status, msg)
+	}
+	return sdk.RuntimeResponse{
+		Status: 200,
+		Body:   mustJSON(map[string]any{"deleted": true, "jobId": jobID}),
 		Writes: writes,
 	}
 }
@@ -729,6 +842,58 @@ func (m *jobManager) hydrateLocked(data map[string]json.RawMessage) {
 			}
 		}
 	}
+
+	now := time.Now().UTC()
+	for k, raw := range data {
+		if !strings.HasPrefix(k, histItemPrefix) || len(raw) == 0 {
+			continue
+		}
+		var item aiHistoryItem
+		if json.Unmarshal(raw, &item) != nil || item.ID == "" || item.UserID < 1 || item.PNGBase64 == "" {
+			continue
+		}
+		if !now.Before(item.ExpiresAt) {
+			m.dirtyHistItems[item.ID] = false
+			continue
+		}
+		if m.historyItems[item.ID] == nil {
+			copyItem := item
+			m.historyItems[item.ID] = &copyItem
+		}
+	}
+	for k, raw := range data {
+		if !strings.HasPrefix(k, histIdxPrefix) || len(raw) == 0 {
+			continue
+		}
+		uid, err := strconv.ParseInt(strings.TrimPrefix(k, histIdxPrefix), 10, 64)
+		if err != nil || uid < 1 {
+			continue
+		}
+		var ids []string
+		if json.Unmarshal(raw, &ids) != nil {
+			continue
+		}
+		existing := append([]string{}, m.historyIndex[uid]...)
+		seen := map[string]bool{}
+		var merged []string
+		for _, id := range append(existing, ids...) {
+			if id == "" || seen[id] {
+				continue
+			}
+			item := m.historyItems[id]
+			if item == nil || item.UserID != uid || !now.Before(item.ExpiresAt) {
+				m.dirtyHistUsers[uid] = true
+				continue
+			}
+			seen[id] = true
+			merged = append(merged, id)
+		}
+		if len(merged) > maxHistoryPerUser {
+			merged = merged[:maxHistoryPerUser]
+			m.dirtyHistUsers[uid] = true
+		}
+		m.historyIndex[uid] = merged
+	}
 }
 
 func (m *jobManager) userDailyCount(day string, uid int64) int {
@@ -899,6 +1064,7 @@ func (m *jobManager) succeedJob(jobID string, res aiJobSuccess, dur time.Duratio
 	if m.activeByUser[j.UserID] == jobID {
 		delete(m.activeByUser, j.UserID)
 	}
+	m.recordHistoryLocked(j, now.UTC())
 	m.stats.TotalGenerated++
 	m.appendLogLocked(aiAuditEntry{
 		Time:       now.UTC().Format(time.RFC3339),
@@ -923,7 +1089,7 @@ func (m *jobManager) getJobForUser(jobID string, uid int64, isAdmin bool) (aiJob
 		return aiJob{}, nil, 403, "无权查看该任务"
 	}
 	var writes map[string]json.RawMessage
-	if m.dirty || j.NeedsFlush {
+	if m.dirty || j.NeedsFlush || len(m.dirtyHistUsers) > 0 || len(m.dirtyHistItems) > 0 {
 		j.NeedsFlush = false
 		writes = m.buildPersistenceWritesLocked()
 		m.dirty = false
@@ -940,18 +1106,161 @@ func (m *jobManager) getJobForUser(jobID string, uid int64, isAdmin bool) (aiJob
 func (m *jobManager) getCompletedSkin(jobID string, uid int64, isAdmin bool) (*aiJob, string, int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	j := m.jobs[jobID]
-	if j == nil {
-		return nil, "生成任务不存在或已过期", 404
+	if j := m.jobs[jobID]; j != nil {
+		if j.UserID != uid && !isAdmin {
+			return nil, "无权操作该任务结果", 403
+		}
+		if j.Status != "succeeded" || j.PNGBase64 == "" {
+			return nil, "当前任务尚未生成成功", 409
+		}
+		copyJob := *j
+		return &copyJob, "", 0
 	}
-	if j.UserID != uid && !isAdmin {
-		return nil, "无权操作该任务结果", 403
+	if item := m.historyItems[jobID]; item != nil && time.Now().UTC().Before(item.ExpiresAt) {
+		if item.UserID != uid && !isAdmin {
+			return nil, "无权操作该任务结果", 403
+		}
+		if item.PNGBase64 == "" {
+			return nil, "当前任务尚未生成成功", 409
+		}
+		return &aiJob{
+			ID:        item.ID,
+			UserID:    item.UserID,
+			Engine:    item.Engine,
+			Model:     item.Model,
+			Prompt:    item.Prompt,
+			Status:    "succeeded",
+			Summary:   item.Summary,
+			Recipe:    item.Recipe,
+			PNGBase64: item.PNGBase64,
+		}, "", 0
 	}
-	if j.Status != "succeeded" || j.PNGBase64 == "" {
-		return nil, "当前任务尚未生成成功", 409
+	return nil, "生成任务不存在或已过期", 404
+}
+
+func (m *jobManager) recordHistoryLocked(j *aiJob, now time.Time) {
+	if j == nil || j.UserID < 1 || j.PNGBase64 == "" {
+		return
 	}
-	copyJob := *j
-	return &copyJob, "", 0
+	m.pruneHistoryForUserLocked(j.UserID, now)
+	var recipeCopy *SkinRecipe
+	if j.Recipe != nil {
+		rc := *j.Recipe
+		recipeCopy = &rc
+	}
+	m.historyItems[j.ID] = &aiHistoryItem{
+		ID:        j.ID,
+		UserID:    j.UserID,
+		Engine:    j.Engine,
+		Model:     j.Model,
+		Prompt:    j.Prompt,
+		Summary:   j.Summary,
+		Recipe:    recipeCopy,
+		PNGBase64: j.PNGBase64,
+		CreatedAt: now,
+		ExpiresAt: now.Add(historyTTL),
+	}
+	m.dirtyHistItems[j.ID] = true
+
+	prev := m.historyIndex[j.UserID]
+	next := make([]string, 0, len(prev)+1)
+	next = append(next, j.ID)
+	for _, id := range prev {
+		if id != j.ID {
+			next = append(next, id)
+		}
+	}
+	if len(next) > maxHistoryPerUser {
+		for _, evicted := range next[maxHistoryPerUser:] {
+			delete(m.historyItems, evicted)
+			m.dirtyHistItems[evicted] = false
+		}
+		next = next[:maxHistoryPerUser]
+	}
+	m.historyIndex[j.UserID] = next
+	m.dirtyHistUsers[j.UserID] = true
+}
+
+func (m *jobManager) pruneHistoryForUserLocked(uid int64, now time.Time) {
+	ids := m.historyIndex[uid]
+	if len(ids) == 0 {
+		return
+	}
+	var kept []string
+	changed := false
+	for _, id := range ids {
+		item := m.historyItems[id]
+		if item == nil || item.UserID != uid || !now.Before(item.ExpiresAt) {
+			if item != nil {
+				delete(m.historyItems, id)
+			}
+			m.dirtyHistItems[id] = false
+			changed = true
+			continue
+		}
+		kept = append(kept, id)
+	}
+	if changed {
+		m.historyIndex[uid] = kept
+		m.dirtyHistUsers[uid] = true
+	}
+}
+
+func (m *jobManager) listHistory(uid int64, now time.Time) ([]aiHistoryItem, map[string]json.RawMessage) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.pruneHistoryForUserLocked(uid, now)
+	ids := m.historyIndex[uid]
+	out := make([]aiHistoryItem, 0, len(ids))
+	for _, id := range ids {
+		if item := m.historyItems[id]; item != nil && now.Before(item.ExpiresAt) {
+			out = append(out, *item)
+		}
+	}
+	var writes map[string]json.RawMessage
+	if m.dirty || len(m.dirtyHistUsers) > 0 || len(m.dirtyHistItems) > 0 {
+		writes = m.buildPersistenceWritesLocked()
+		m.dirty = false
+	}
+	return out, writes
+}
+
+func (m *jobManager) deleteHistoryItem(jobID string, uid int64, isAdmin bool) (map[string]json.RawMessage, int, string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	item := m.historyItems[jobID]
+	if item == nil {
+		return nil, 404, "历史记录不存在或已过期"
+	}
+	if item.UserID != uid && !isAdmin {
+		return nil, 403, "无权删除他人历史记录"
+	}
+	ownerID := item.UserID
+	delete(m.historyItems, jobID)
+	m.dirtyHistItems[jobID] = false
+	ids := m.historyIndex[ownerID]
+	var kept []string
+	for _, id := range ids {
+		if id != jobID {
+			kept = append(kept, id)
+		}
+	}
+	m.historyIndex[ownerID] = kept
+	m.dirtyHistUsers[ownerID] = true
+	writes := m.buildPersistenceWritesLocked()
+	m.dirty = false
+	return writes, 0, ""
+}
+
+func (m *jobManager) flushPendingWrites() map[string]json.RawMessage {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.dirty && len(m.dirtyHistUsers) == 0 && len(m.dirtyHistItems) == 0 {
+		return nil
+	}
+	writes := m.buildPersistenceWritesLocked()
+	m.dirty = false
+	return writes
 }
 
 func (m *jobManager) recordSaved() map[string]json.RawMessage {
@@ -1010,11 +1319,30 @@ func (m *jobManager) buildPersistenceWritesLocked() map[string]json.RawMessage {
 			usageOut[day] = inner
 		}
 	}
-	return map[string]json.RawMessage{
+	out := map[string]json.RawMessage{
 		"stats":       mustJSON(m.stats),
 		"audit_log":   mustJSON(m.logs),
 		"daily_usage": mustJSON(usageOut),
 	}
+	for uid := range m.dirtyHistUsers {
+		ids := m.historyIndex[uid]
+		if ids == nil {
+			ids = []string{}
+		}
+		out[histIdxPrefix+strconv.FormatInt(uid, 10)] = mustJSON(ids)
+		delete(m.dirtyHistUsers, uid)
+	}
+	for jobID, upsert := range m.dirtyHistItems {
+		if upsert {
+			if item := m.historyItems[jobID]; item != nil {
+				out[histItemPrefix+jobID] = mustJSON(item)
+			}
+		} else {
+			out[histItemPrefix+jobID] = json.RawMessage("null")
+		}
+		delete(m.dirtyHistItems, jobID)
+	}
+	return out
 }
 
 func (m *jobManager) appendLogLocked(entry aiAuditEntry) {

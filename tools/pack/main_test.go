@@ -302,4 +302,46 @@ func TestV2ManifestValidationAndSigning(t *testing.T) {
 	if _, err := verifyArchiveSignature(tampered.Bytes(), pub); err == nil {
 		t.Fatal("expected tampered archive to fail signature check")
 	}
+
+	// Setting defaults, description, and options pass SDK validation during packing.
+	optDir := filepath.Join(root, "plugins", "withopts")
+	if err := os.MkdirAll(optDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	optManifest := `{
+  "manifest": {
+    "id": "community.withopts",
+    "name": "With Options",
+    "version": "0.1.0",
+    "settingsNamespace": "community.withopts",
+    "permissions": ["routes.public"],
+    "settings": [
+      {
+        "key": "theme",
+        "label": "Theme",
+        "type": "text",
+        "default": "light",
+        "description": "Select color palette",
+        "options": [
+          {"value": "light", "label": "Light"},
+          {"value": "dark", "label": "Dark"}
+        ]
+      },
+      {
+        "key": "limit",
+        "label": "Limit",
+        "type": "number",
+        "default": 5
+      }
+    ]
+  },
+  "protocol": 2,
+  "routes": [{"method": "GET", "path": "/ping", "access": "public"}]
+}`
+	if err := os.WriteFile(filepath.Join(optDir, "manifest.json"), []byte(optManifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := packPlugin(context.Background(), optDir, filepath.Join(root, "dist"), []string{"linux/amd64"}, fakeBuilder); err != nil {
+		t.Fatalf("expected settings with defaults/options to pack cleanly, got %v", err)
+	}
 }

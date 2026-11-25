@@ -3,118 +3,132 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>玩家名片与渲染图</title>
+<title>玩家名片与角色渲染</title>
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #fafafa;
+    --bg: transparent;
     --panel: #ffffff;
     --subtle: #f4f4f6;
     --ink: #18181b;
     --muted: #52525b;
     --border: #e4e4e7;
     --accent: #2563eb;
-    --radius: 10px;
+    --accent-hover: #1d4ed8;
+    --accent-soft: rgba(37, 99, 235, 0.12);
+    --btn-text: #ffffff;
+    --radius: 12px;
+    --radius-ctl: 9px;
+    --shadow: none;
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: var(--font-sans);
   }
   :root[data-theme="dark"] {
-    --bg: #111113;
     --panel: #18181b;
     --subtle: #202024;
     --ink: #f4f4f5;
     --muted: #a1a1aa;
     --border: #2e2e34;
     --accent: #60a5fa;
+    --accent-hover: #3b82f6;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 16px; font: 14px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
-  .layout { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
-  @media (max-width: 780px) { .layout { grid-template-columns: 1fr; } }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: grid; gap: 14px; }
-  h2 { margin: 0; font-size: 15px; font-weight: 600; }
-  .field { display: grid; gap: 6px; }
-  label { font-size: 12px; color: var(--muted); font-weight: 600; }
-  select, input, button {
-    font: inherit; min-height: 36px; border-radius: 8px; border: 1px solid var(--border);
-    background: var(--panel); color: var(--ink); padding: 6px 10px;
-  }
-  button { cursor: pointer; font-weight: 500; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
-  .preview-stage { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--subtle); }
-  .preview-stage img { image-rendering: pixelated; }
-  .preview-avatar { width: 96px; height: 96px; border-radius: 10px; }
-  .preview-body { width: 96px; height: 192px; }
-  .preview-card { max-width: 100%; height: auto; }
-  .snippet { display: grid; gap: 6px; }
-  .snippet-row { display: flex; gap: 8px; }
-  .snippet-row input { flex: 1; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
-  .status { font-size: 12px; color: var(--muted); margin: 0; }
+  body { margin: 0; padding: 4px; background: transparent; color: var(--ink); font: 14px/1.55 var(--font-sans); }
+  .layout { display: grid; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); display: grid; gap: 12px; }
+  h2 { margin: 0; font-size: 16px; font-weight: 600; font-family: var(--font-display); }
+  .sub { margin: 0; font-size: 13px; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  label { display: grid; gap: 5px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  select, input, button { font: inherit; min-height: 36px; border-radius: var(--radius-ctl); border: 1px solid var(--border); background: var(--panel); color: var(--ink); padding: 6px 10px; }
+  button { cursor: pointer; font-weight: 500; transition: background-color 140ms ease, border-color 140ms ease; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--btn-text); }
+  button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .preview-stage { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 16px; border-radius: var(--radius-ctl); background: var(--subtle); border: 1px solid var(--border); }
+  .preview-box { display: grid; gap: 6px; justify-items: center; }
+  .preview-box span { font-size: 12px; color: var(--muted); }
+  img.pixel { image-rendering: pixelated; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); }
+  img.card-img { max-width: 100%; height: auto; border-radius: 14px; }
+  .snip { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--radius-ctl); background: var(--subtle); border: 1px solid var(--border); }
+  .snip-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .snip-head strong { font-size: 13px; }
+  code { font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; word-break: break-all; color: var(--ink); }
 </style>
 </head>
 <body>
 <div class="layout">
-  <div class="card">
-    <h2>名片与渲染选项</h2>
-    <div class="field">
-      <label for="char-select">选择角色</label>
-      <select id="char-select"></select>
-    </div>
-    <div class="field">
-      <label for="card-theme">SVG 名片配色</label>
-      <select id="card-theme">
-        <option value="light">浅色经典 (Light)</option>
-        <option value="dark">深色夜间 (Dark)</option>
-        <option value="emerald">祖母绿 (Emerald)</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="avatar-size">头像边长 (px)</label>
-      <select id="avatar-size">
-        <option value="64">64×64</option>
-        <option value="128" selected>128×128</option>
-        <option value="256">256×256</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="body-side">立绘朝向</label>
-      <select id="body-side">
-        <option value="front">正面视角</option>
-        <option value="back">背面视角</option>
-      </select>
-    </div>
-    <label class="check"><input id="opt-outer" type="checkbox" checked /> 渲染第二外层饰品与帽子</label>
-    <p id="empty-note" class="status" hidden>尚未创建角色，请先前往角色管理创建角色。</p>
-  </div>
-
-  <div class="card">
-    <h2>实时预览与嵌入链接</h2>
-    <div class="preview-stage">
-      <img id="img-avatar" class="preview-avatar" alt="头像预览" />
-      <img id="img-body" class="preview-body" alt="全身渲染" />
-      <img id="img-card" class="preview-card" alt="SVG 名片预览" />
+  <section class="card">
+    <div>
+      <h2>角色渲染与玩家名片生成器</h2>
+      <p class="sub">选择你的角色即可生成公开头像、全身 2D 立绘以及可直接嵌入论坛与 GitHub README 的矢量 SVG 名片链接。</p>
     </div>
 
-    <div class="snippet">
-      <label>SVG 玩家名片直链</label>
-      <div class="snippet-row"><input id="url-card" type="text" readonly /><button type="button" data-copy="url-card">复制</button></div>
+    <div class="grid">
+      <label>选择角色
+        <select id="char-select"></select>
+      </label>
+      <label>名片配色主题
+        <select id="card-theme">
+          <option value="light">浅色 (Light)</option>
+          <option value="dark">深色 (Dark)</option>
+          <option value="emerald">翠绿 (Emerald)</option>
+        </select>
+      </label>
+      <label>头像尺寸
+        <select id="av-size">
+          <option value="64">64×64</option>
+          <option value="128" selected>128×128</option>
+          <option value="256">256×256</option>
+        </select>
+      </label>
+      <label>立绘朝向
+        <select id="body-side">
+          <option value="front">正面</option>
+          <option value="back">背面</option>
+        </select>
+      </label>
     </div>
-    <div class="snippet">
-      <label>Markdown 嵌入代码 (GitHub README)</label>
-      <div class="snippet-row"><input id="url-md" type="text" readonly /><button type="button" data-copy="url-md">复制</button></div>
+
+    <div id="stage" class="preview-stage" hidden>
+      <div class="preview-box">
+        <img id="img-avatar" class="pixel" width="96" height="96" alt="角色头像" />
+        <span>角色头像</span>
+      </div>
+      <div class="preview-box">
+        <img id="img-body" class="pixel" width="80" height="160" alt="全身立绘" />
+        <span>全身立绘</span>
+      </div>
+      <div class="preview-box" style="flex:1;min-width:260px">
+        <img id="img-card" class="card-img" alt="玩家名片 SVG" />
+        <span>SVG 玩家名片</span>
+      </div>
     </div>
-    <div class="snippet">
-      <label>BBCode 嵌入代码 (Minecraft 论坛)</label>
-      <div class="snippet-row"><input id="url-bb" type="text" readonly /><button type="button" data-copy="url-bb">复制</button></div>
+    <p id="empty-msg" class="sub" hidden></p>
+  </section>
+
+  <section id="links-card" class="card" hidden>
+    <h2>快捷链接与嵌入代码</h2>
+    <div class="snip">
+      <div class="snip-head"><strong>SVG 玩家名片链接</strong><button type="button" data-copy="card-url">复制链接</button></div>
+      <code id="card-url"></code>
     </div>
-    <div class="snippet">
-      <label>正方形头像 PNG 直链</label>
-      <div class="snippet-row"><input id="url-avatar" type="text" readonly /><button type="button" data-copy="url-avatar">复制</button></div>
+    <div class="snip">
+      <div class="snip-head"><strong>Markdown / GitHub README 嵌入代码</strong><button type="button" data-copy="md-code">复制 Markdown</button></div>
+      <code id="md-code"></code>
     </div>
-    <div class="snippet">
-      <label>全身纸片立绘 PNG 直链</label>
-      <div class="snippet-row"><input id="url-body" type="text" readonly /><button type="button" data-copy="url-body">复制</button></div>
+    <div class="snip">
+      <div class="snip-head"><strong>论坛 BBCode 嵌入代码</strong><button type="button" data-copy="bb-code">复制 BBCode</button></div>
+      <code id="bb-code"></code>
     </div>
-  </div>
+    <div class="snip">
+      <div class="snip-head"><strong>角色头像直链</strong><button type="button" data-copy="avatar-url">复制链接</button></div>
+      <code id="avatar-url"></code>
+    </div>
+    <div class="snip">
+      <div class="snip-head"><strong>全身立绘直链</strong><button type="button" data-copy="body-url">复制链接</button></div>
+      <code id="body-url"></code>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -122,111 +136,161 @@
   const reqMap = new Map();
   const hostMap = new Map();
   let seq = 0;
-  let publicBase = '';
+  let baseOrigin = window.location.origin;
+
+  function postResize() {
+    window.parent.postMessage({
+      type: 'wishingskin:resize',
+      height: Math.max(280, Math.ceil(document.documentElement.scrollHeight))
+    }, '*');
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(postResize).observe(document.documentElement);
+  }
+  window.addEventListener('load', postResize);
+
+  function applyHostContext(ctx) {
+    if (!ctx || typeof ctx !== 'object') return;
+    document.documentElement.dataset.theme = ctx.theme === 'dark' ? 'dark' : 'light';
+    if (ctx.tokens && typeof ctx.tokens === 'object') {
+      const s = document.documentElement.style;
+      const map = {
+        panel: '--panel', subtle: '--subtle', ink: '--ink', muted: '--muted', border: '--border',
+        accent: '--accent', accentHover: '--accent-hover', accentSoft: '--accent-soft',
+        buttonText: '--btn-text', radiusCard: '--radius', radiusControl: '--radius-ctl', shadowCard: '--shadow',
+        fontSans: '--font-sans', fontDisplay: '--font-display'
+      };
+      for (const [k, cssVar] of Object.entries(map)) {
+        if (typeof ctx.tokens[k] === 'string' && ctx.tokens[k]) s.setProperty(cssVar, ctx.tokens[k]);
+      }
+    }
+    if (typeof ctx.fontFaceCss === 'string') {
+      let el = document.getElementById('ws-host-fonts');
+      if (!el) { el = document.createElement('style'); el.id = 'ws-host-fonts'; document.head.appendChild(el); }
+      el.textContent = ctx.fontFaceCss;
+    }
+    requestAnimationFrame(postResize);
+  }
 
   window.addEventListener('message', (event) => {
     const msg = event.data;
     if (!msg || typeof msg !== 'object') return;
-    if (msg.type === 'wishingskin:context' && msg.context) {
-      document.documentElement.dataset.theme = msg.context.theme === 'dark' ? 'dark' : 'light';
-      return;
-    }
+    if (msg.type === 'wishingskin:context' && msg.context) { applyHostContext(msg.context); return; }
     if (msg.type === 'wishingskin:response' && reqMap.has(msg.id)) {
       const h = reqMap.get(msg.id); reqMap.delete(msg.id); clearTimeout(h.t);
       h.resolve({ status: msg.status, body: msg.body });
+      return;
     }
-    if (msg.type === 'wishingskin:host-response' && hostMap.has(msg.id)) {
+    if (msg.type === 'wishingskin:host_result' && hostMap.has(msg.id)) {
       const h = hostMap.get(msg.id); hostMap.delete(msg.id); clearTimeout(h.t);
-      h.resolve(msg);
+      if (msg.ok) h.resolve(msg.data);
+      else h.reject(new Error(msg.error || '操作失败'));
     }
   });
 
-  function callPlugin(method, path, query) {
+  function callPlugin(method, path, body) {
     const id = 'rc-' + (++seq);
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, 15000);
+      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, 10000);
       reqMap.set(id, { resolve, reject, t });
-      window.parent.postMessage({ type: 'wishingskin:request', id, method, path, query }, '*');
+      window.parent.postMessage({ type: 'wishingskin:request', id, method, path, body }, '*');
     });
   }
 
   function callHost(action, payload) {
     const id = 'rch-' + (++seq);
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => { hostMap.delete(id); reject(new Error('宿主响应超时')); }, 15000);
+      const t = setTimeout(() => { hostMap.delete(id); reject(new Error('宿主响应超时')); }, 10000);
       hostMap.set(id, { resolve, reject, t });
       window.parent.postMessage({ type: 'wishingskin:host', id, action, payload }, '*');
     });
   }
 
-  async function refreshPreviews() {
+  function renderSelected() {
     const name = document.getElementById('char-select').value;
-    if (!name) return;
+    const stage = document.getElementById('stage');
+    const linksCard = document.getElementById('links-card');
+    if (!name) {
+      stage.hidden = true;
+      linksCard.hidden = true;
+      requestAnimationFrame(postResize);
+      return;
+    }
+    stage.hidden = false;
+    linksCard.hidden = false;
+
     const theme = document.getElementById('card-theme').value;
-    const size = document.getElementById('avatar-size').value;
+    const size = document.getElementById('av-size').value;
     const side = document.getElementById('body-side').value;
-    const outer = document.getElementById('opt-outer').checked ? '1' : '0';
 
-    const avQ = 'name=' + encodeURIComponent(name) + '&size=' + size + '&hat=' + outer;
-    const bdQ = 'name=' + encodeURIComponent(name) + '&scale=6&side=' + side + '&outer=' + outer;
-    const cdQ = 'name=' + encodeURIComponent(name) + '&theme=' + theme;
+    const qName = encodeURIComponent(name);
+    const avPath = '/api/plugins/wishingskin.render-card/avatar?name=' + qName + '&size=' + encodeURIComponent(size);
+    const bdPath = '/api/plugins/wishingskin.render-card/body?name=' + qName + '&side=' + encodeURIComponent(side) + '&scale=6';
+    const cdPath = '/api/plugins/wishingskin.render-card/card?name=' + qName + '&theme=' + encodeURIComponent(theme);
 
-    const prefix = (publicBase || '') + '/api/plugins/wishingskin.render-card';
-    const cardUrl = prefix + '/card?' + cdQ;
-    document.getElementById('url-card').value = cardUrl;
-    document.getElementById('url-md').value = '![' + name + '](' + cardUrl + ')';
-    document.getElementById('url-bb').value = '[img]' + prefix + '/body?' + bdQ + '[/img]';
-    document.getElementById('url-avatar').value = prefix + '/avatar?' + avQ;
-    document.getElementById('url-body').value = prefix + '/body?' + bdQ;
+    document.getElementById('img-avatar').src = avPath;
+    document.getElementById('img-body').src = bdPath;
+    document.getElementById('img-card').src = cdPath;
 
-    const [av, bd, cd] = await Promise.all([
-      callPlugin('GET', '/avatar', avQ),
-      callPlugin('GET', '/body', bdQ),
-      callPlugin('GET', '/card', cdQ)
-    ]);
-    if (av.status === 200 && av.body.bodyBase64) document.getElementById('img-avatar').src = 'data:' + av.body.contentType + ';base64,' + av.body.bodyBase64;
-    if (bd.status === 200 && bd.body.bodyBase64) document.getElementById('img-body').src = 'data:' + bd.body.contentType + ';base64,' + bd.body.bodyBase64;
-    if (cd.status === 200 && cd.body.bodyBase64) document.getElementById('img-card').src = 'data:' + cd.body.contentType + ';base64,' + cd.body.bodyBase64;
+    const fullCard = baseOrigin + cdPath;
+    const fullAv = baseOrigin + avPath;
+    const fullBd = baseOrigin + bdPath;
+
+    document.getElementById('card-url').textContent = fullCard;
+    document.getElementById('avatar-url').textContent = fullAv;
+    document.getElementById('body-url').textContent = fullBd;
+    document.getElementById('md-code').textContent = '![' + name + ' WishingSkin](' + fullCard + ')';
+    document.getElementById('bb-code').textContent = '[img]' + fullCard + '[/img]';
+    requestAnimationFrame(postResize);
   }
 
   async function init() {
     const [infoRes, charRes] = await Promise.all([
-      callPlugin('GET', '/info', ''),
-      callHost('listCharacters', {})
+      callPlugin('GET', '/info').catch(() => null),
+      callHost('listCharacters').catch(() => ({ characters: [] }))
     ]);
-    if (infoRes.status === 200) {
-      publicBase = infoRes.body.publicUrl || '';
+    if (infoRes && infoRes.status === 200 && infoRes.body) {
+      if (infoRes.body.publicUrl) baseOrigin = String(infoRes.body.publicUrl).replace(/\/+$/, '');
       if (infoRes.body.defaultTheme) document.getElementById('card-theme').value = infoRes.body.defaultTheme;
     }
-    const cSel = document.getElementById('char-select');
-    const chars = (charRes.ok && charRes.data && charRes.data.characters) ? charRes.data.characters : [];
-    document.getElementById('empty-note').hidden = chars.length > 0;
+
+    const sel = document.getElementById('char-select');
+    sel.innerHTML = '';
+    const chars = (charRes && charRes.characters) || [];
+    if (chars.length === 0) {
+      const em = document.getElementById('empty-msg');
+      em.hidden = false;
+      em.textContent = '你还没有创建角色，请先前往“角色管理”创建角色后再生成名片。';
+      requestAnimationFrame(postResize);
+      return;
+    }
     for (const c of chars) {
       const opt = document.createElement('option');
       opt.value = c.name;
-      opt.textContent = c.name;
-      cSel.appendChild(opt);
+      opt.textContent = c.name + (c.model === 'slim' ? '（Alex）' : '（Steve）');
+      sel.appendChild(opt);
     }
-    if (chars.length) void refreshPreviews();
+    renderSelected();
   }
 
-  for (const id of ['char-select', 'card-theme', 'avatar-size', 'body-side', 'opt-outer']) {
-    document.getElementById(id).addEventListener('change', () => void refreshPreviews());
+  for (const id of ['char-select', 'card-theme', 'av-size', 'body-side']) {
+    document.getElementById(id).addEventListener('change', renderSelected);
   }
 
-  for (const btn of document.querySelectorAll('[data-copy]')) {
-    btn.addEventListener('click', async () => {
-      const input = document.getElementById(btn.dataset.copy);
-      if (!input || !input.value) return;
-      try {
-        await navigator.clipboard.writeText(input.value);
-        void callHost('notify', { message: '已复制到剪贴板。', kind: 'success' });
-      } catch {
-        input.select();
-        void callHost('notify', { message: '已选中链接，请按 Ctrl+C 复制。', kind: 'success' });
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-copy]');
+    if (!btn) return;
+    const codeEl = document.getElementById(btn.dataset.copy);
+    if (!codeEl) return;
+    const text = codeEl.textContent || '';
+    try {
+      await callHost('copyText', { text });
+    } catch {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text).catch(() => {});
       }
-    });
-  }
+    }
+  });
 
   void init();
 })();

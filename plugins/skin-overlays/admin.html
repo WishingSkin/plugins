@@ -7,41 +7,51 @@
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #fafafa;
+    --bg: transparent;
     --panel: #ffffff;
     --subtle: #f4f4f6;
     --ink: #18181b;
     --muted: #52525b;
     --border: #e4e4e7;
     --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-soft: rgba(37, 99, 235, 0.12);
+    --btn-text: #ffffff;
     --danger: #b91c1c;
-    --radius: 10px;
+    --danger-bg: rgba(185, 28, 28, 0.12);
+    --radius: 12px;
+    --radius-ctl: 9px;
+    --shadow: none;
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: var(--font-sans);
   }
   :root[data-theme="dark"] {
-    --bg: #111113;
     --panel: #18181b;
     --subtle: #202024;
     --ink: #f4f4f5;
     --muted: #a1a1aa;
     --border: #2e2e34;
     --accent: #60a5fa;
+    --accent-hover: #3b82f6;
     --danger: #f87171;
+    --danger-bg: rgba(248, 113, 113, 0.14);
   }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 16px; font: 14px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
-  .stack { display: grid; gap: 16px; }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: grid; gap: 12px; }
-  h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  body { margin: 0; padding: 4px; background: transparent; color: var(--ink); font: 14px/1.55 var(--font-sans); }
+  .stack { display: grid; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); display: grid; gap: 12px; }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; font-family: var(--font-display); }
   .list { display: grid; gap: 10px; }
-  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--subtle); }
-  .row img { width: 32px; height: 64px; image-rendering: pixelated; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--subtle); }
+  .row img { width: 32px; height: 64px; image-rendering: pixelated; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); }
   .row-meta { flex: 1; min-width: 140px; display: grid; gap: 2px; }
   .row-meta span { font-size: 12px; color: var(--muted); }
   .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; align-items: end; }
-  label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
-  input, button { font: inherit; min-height: 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); padding: 6px 10px; }
-  button { cursor: pointer; font-weight: 500; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  label { display: grid; gap: 5px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  input, button { font: inherit; min-height: 36px; border-radius: var(--radius-ctl); border: 1px solid var(--border); background: var(--panel); color: var(--ink); padding: 6px 10px; }
+  button { cursor: pointer; font-weight: 500; transition: background-color 140ms ease, border-color 140ms ease; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--btn-text); }
+  button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
   button.danger { color: var(--danger); border-color: var(--danger); }
   .msg { font-size: 12px; color: var(--muted); margin: 0; }
 </style>
@@ -49,14 +59,14 @@
 <body>
 <div class="stack">
   <section class="card">
-    <h2>内置装扮预设</h2>
+    <h2>内置装扮预设示例</h2>
     <div id="presets" class="list"></div>
   </section>
 
   <section class="card">
     <h2>上传自定义透明叠层</h2>
     <form id="add-form" class="form-grid">
-      <label>装饰名称<input id="c-name" type="text" maxlength="64" required placeholder="例如：新年春联" /></label>
+      <label>装饰名称<input id="c-name" type="text" maxlength="64" required placeholder="例如：冬日针织围巾" /></label>
       <label>分类标签<input id="c-cat" type="text" maxlength="32" value="自定义" /></label>
       <label>64×64 或 128×128 PNG（&le; 32 KiB）<input id="c-file" type="file" accept="image/png" required /></label>
       <button id="add-btn" class="primary" type="submit">添加叠层</button>
@@ -71,13 +81,45 @@
   const reqMap = new Map();
   let seq = 0;
 
+  function postResize() {
+    window.parent.postMessage({
+      type: 'wishingskin:resize',
+      height: Math.max(260, Math.ceil(document.documentElement.scrollHeight))
+    }, '*');
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(postResize).observe(document.documentElement);
+  }
+  window.addEventListener('load', postResize);
+
+  function applyHostContext(ctx) {
+    if (!ctx || typeof ctx !== 'object') return;
+    document.documentElement.dataset.theme = ctx.theme === 'dark' ? 'dark' : 'light';
+    if (ctx.tokens && typeof ctx.tokens === 'object') {
+      const s = document.documentElement.style;
+      const map = {
+        panel: '--panel', subtle: '--subtle', ink: '--ink', muted: '--muted', border: '--border',
+        accent: '--accent', accentHover: '--accent-hover', accentSoft: '--accent-soft',
+        buttonText: '--btn-text', error: '--danger', errorBg: '--danger-bg',
+        radiusCard: '--radius', radiusControl: '--radius-ctl', shadowCard: '--shadow',
+        fontSans: '--font-sans', fontDisplay: '--font-display'
+      };
+      for (const [k, cssVar] of Object.entries(map)) {
+        if (typeof ctx.tokens[k] === 'string' && ctx.tokens[k]) s.setProperty(cssVar, ctx.tokens[k]);
+      }
+    }
+    if (typeof ctx.fontFaceCss === 'string') {
+      let el = document.getElementById('ws-host-fonts');
+      if (!el) { el = document.createElement('style'); el.id = 'ws-host-fonts'; document.head.appendChild(el); }
+      el.textContent = ctx.fontFaceCss;
+    }
+    requestAnimationFrame(postResize);
+  }
+
   window.addEventListener('message', (event) => {
     const msg = event.data;
     if (!msg || typeof msg !== 'object') return;
-    if (msg.type === 'wishingskin:context' && msg.context) {
-      document.documentElement.dataset.theme = msg.context.theme === 'dark' ? 'dark' : 'light';
-      return;
-    }
+    if (msg.type === 'wishingskin:context' && msg.context) { applyHostContext(msg.context); return; }
     if (msg.type === 'wishingskin:response' && reqMap.has(msg.id)) {
       const h = reqMap.get(msg.id); reqMap.delete(msg.id); clearTimeout(h.t);
       h.resolve({ status: msg.status, body: msg.body });
@@ -118,22 +160,31 @@
 
     const customEl = document.getElementById('custom');
     customEl.innerHTML = '';
-    for (const c of res.body.custom || []) {
-      const row = document.createElement('div');
-      row.className = 'row';
-      const img = document.createElement('img'); img.src = c.previewDataUrl; img.alt = c.name;
-      const meta = document.createElement('div'); meta.className = 'row-meta';
-      const strong = document.createElement('strong'); strong.textContent = c.name;
-      const span = document.createElement('span'); span.textContent = c.category;
-      meta.append(strong, span);
-      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'danger'; btn.textContent = '删除';
-      btn.addEventListener('click', async () => {
-        await callPlugin('POST', '/admin/overlays/delete', { id: c.id });
-        await refresh();
-      });
-      row.append(img, meta, btn);
-      customEl.appendChild(row);
+    const customList = res.body.custom || [];
+    if (customList.length === 0) {
+      const p = document.createElement('p');
+      p.className = 'msg';
+      p.textContent = '暂无自定义叠层，可通过上方表单上传透明装饰图。';
+      customEl.appendChild(p);
+    } else {
+      for (const c of customList) {
+        const row = document.createElement('div');
+        row.className = 'row';
+        const img = document.createElement('img'); img.src = c.previewDataUrl; img.alt = c.name;
+        const meta = document.createElement('div'); meta.className = 'row-meta';
+        const strong = document.createElement('strong'); strong.textContent = c.name;
+        const span = document.createElement('span'); span.textContent = c.category;
+        meta.append(strong, span);
+        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'danger'; btn.textContent = '删除';
+        btn.addEventListener('click', async () => {
+          await callPlugin('POST', '/admin/overlays/delete', { id: c.id });
+          await refresh();
+        });
+        row.append(img, meta, btn);
+        customEl.appendChild(row);
+      }
     }
+    requestAnimationFrame(postResize);
   }
 
   document.getElementById('add-form').addEventListener('submit', async (e) => {

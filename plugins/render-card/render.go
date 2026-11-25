@@ -225,8 +225,23 @@ func routeCard(ctx context.Context, cfg renderConfig, req sdk.RuntimeRequest) sd
 		}
 	}
 
-	avatarRaw, _ := skinpng.EncodePNG(skinpng.RenderHead(skin, 96, true))
-	avatarURI := "data:image/png;base64," + base64.StdEncoding.EncodeToString(avatarRaw)
+	head8 := skinpng.RenderHead(skin, 8, true)
+	var avatarBuf strings.Builder
+	avatarBuf.WriteString(`<g shape-rendering="crispEdges">`)
+	for py := range 8 {
+		for px := range 8 {
+			c := head8.NRGBAAt(px, py)
+			if c.A == 0 {
+				continue
+			}
+			if c.A == 255 {
+				fmt.Fprintf(&avatarBuf, `<rect x="%d" y="%d" width="9" height="9" fill="#%02x%02x%02x"/>`, 30+px*9, 34+py*9, c.R, c.G, c.B)
+			} else {
+				fmt.Fprintf(&avatarBuf, `<rect x="%d" y="%d" width="9" height="9" fill="#%02x%02x%02x" fill-opacity="%.3f"/>`, 30+px*9, 34+py*9, c.R, c.G, c.B, float64(c.A)/255.0)
+			}
+		}
+	}
+	avatarBuf.WriteString(`</g>`)
 
 	bg, border, fg, muted, pillBg, pillFg := cardPalette(theme)
 	modelLabel := "Classic (Steve)"
@@ -239,15 +254,16 @@ func routeCard(ctx context.Context, cfg renderConfig, req sdk.RuntimeRequest) sd
 		verifiedBadge = fmt.Sprintf(`<rect x="310" y="24" width="110" height="24" rx="12" fill="%s"/><text x="365" y="40" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="11" font-weight="600" fill="%s">正版 Minecraft</text>`, pillBg, pillFg)
 	}
 
+	cleanUUID := strings.ReplaceAll(strings.TrimSpace(ch.UUID), "-", "")
 	shortUUID := ch.UUID
-	if len(shortUUID) > 16 {
-		shortUUID = shortUUID[:8] + "-" + shortUUID[8:12] + "-" + shortUUID[12:16] + "..."
+	if len(cleanUUID) > 16 {
+		shortUUID = cleanUUID[:8] + "-" + cleanUUID[8:12] + "-" + cleanUUID[12:16] + "..."
 	}
 
 	svg := fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="440" height="140" viewBox="0 0 440 140" role="img" aria-label="%s">
 <rect x="0.5" y="0.5" width="439" height="139" rx="14" fill="%s" stroke="%s"/>
 <rect x="20" y="24" width="92" height="92" rx="12" fill="%s" stroke="%s"/>
-<image x="28" y="32" width="76" height="76" href="%s" style="image-rendering:pixelated"/>
+%s
 <text x="128" y="46" font-family="system-ui,-apple-system,sans-serif" font-size="20" font-weight="700" fill="%s">%s</text>
 %s
 <text x="128" y="72" font-family="system-ui,-apple-system,sans-serif" font-size="12" fill="%s">模型: %s  站点: %s</text>
@@ -256,7 +272,7 @@ func routeCard(ctx context.Context, cfg renderConfig, req sdk.RuntimeRequest) sd
 </svg>`,
 		html.EscapeString(ch.Name),
 		bg, border,
-		pillBg, border, avatarURI,
+		pillBg, border, avatarBuf.String(),
 		fg, html.EscapeString(ch.Name),
 		verifiedBadge,
 		muted, html.EscapeString(modelLabel), html.EscapeString(siteName),

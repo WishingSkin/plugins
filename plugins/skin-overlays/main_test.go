@@ -70,7 +70,7 @@ func TestOverlaysPreviewApplyPointsAndAdminCustomCRUD(t *testing.T) {
 	t.Setenv("WS_HOST_API_URL", hostSrv.URL)
 	t.Setenv("WS_HOST_API_TOKEN", "test-host-token")
 
-	// 1. User /overlays lists all 6 built-in presets.
+	// 1. User /overlays lists built-in winter_scarf preset.
 	listResp, _ := handleRequest(context.Background(), sdk.RuntimeRequest{
 		Kind:      "route",
 		Method:    "GET",
@@ -79,17 +79,17 @@ func TestOverlaysPreviewApplyPointsAndAdminCustomCRUD(t *testing.T) {
 		Settings:  map[string]any{"points_cost": float64(10), "max_layers": float64(3)},
 	})
 	rt := listResp.(sdk.RuntimeResponse)
-	if rt.Status != 200 || !strings.Contains(string(rt.Body), "santa_hat") || !strings.Contains(string(rt.Body), "winter_scarf") {
+	if rt.Status != 200 || !strings.Contains(string(rt.Body), "winter_scarf") || strings.Contains(string(rt.Body), "santa_hat") {
 		t.Fatalf("unexpected /overlays response: %+v", rt)
 	}
 
-	// 2. Preview upgrades 64x32 base skin to 64x64 and applies santa_hat.
+	// 2. Preview upgrades 64x32 base skin to 64x64 and applies winter_scarf.
 	prevResp, _ := handleRequest(context.Background(), sdk.RuntimeRequest{
 		Kind:      "route",
 		Method:    "POST",
 		Path:      "/preview",
 		Principal: sdk.Principal{ID: 9},
-		Body:      mustJSON(map[string]any{"fileHash": hash, "layers": []layerSpec{{ID: "santa_hat", Opacity: 1.0}}}),
+		Body:      mustJSON(map[string]any{"fileHash": hash, "layers": []layerSpec{{ID: "winter_scarf", Opacity: 1.0}}}),
 	})
 	prt := prevResp.(sdk.RuntimeResponse)
 	if prt.Status != 200 || !strings.Contains(string(prt.Body), `"width":64`) || !strings.Contains(string(prt.Body), `"height":64`) {
@@ -104,7 +104,7 @@ func TestOverlaysPreviewApplyPointsAndAdminCustomCRUD(t *testing.T) {
 		Path:      "/apply",
 		Principal: sdk.Principal{ID: 9},
 		Settings:  map[string]any{"points_cost": float64(10)},
-		Body:      mustJSON(map[string]any{"fileHash": hash, "name": "BlockedSkin", "layers": []layerSpec{{ID: "santa_hat", Opacity: 1.0}}}),
+		Body:      mustJSON(map[string]any{"fileHash": hash, "name": "BlockedSkin", "layers": []layerSpec{{ID: "winter_scarf", Opacity: 1.0}}}),
 	})
 	if failResp.(sdk.RuntimeResponse).Status != 409 || uploadedName != "" {
 		t.Fatalf("expected 409 without upload, got %+v uploaded=%q", failResp, uploadedName)
@@ -118,7 +118,7 @@ func TestOverlaysPreviewApplyPointsAndAdminCustomCRUD(t *testing.T) {
 		Path:      "/apply",
 		Principal: sdk.Principal{ID: 9},
 		Settings:  map[string]any{"points_cost": float64(10)},
-		Body:      mustJSON(map[string]any{"fileHash": hash, "name": "HolidayHero", "characterId": 42, "layers": []layerSpec{{ID: "golden_crown", Opacity: 1.0}}}),
+		Body:      mustJSON(map[string]any{"fileHash": hash, "name": "HolidayHero", "characterId": 42, "layers": []layerSpec{{ID: "winter_scarf", Opacity: 1.0}}}),
 	})
 	ort := okResp.(sdk.RuntimeResponse)
 	if ort.Status != 200 || uploadedName != "HolidayHero" || !strings.Contains(boundCharID, "/characters/42/") {
@@ -152,13 +152,13 @@ func TestOverlaysPreviewApplyPointsAndAdminCustomCRUD(t *testing.T) {
 		Path:      "/admin/overlays",
 		Principal: sdk.Principal{ID: 1, Admin: true},
 		Data:      data,
-		Body:      mustJSON(map[string]any{"action": "toggle", "id": "santa_hat", "enabled": false}),
+		Body:      mustJSON(map[string]any{"action": "toggle", "id": "winter_scarf", "enabled": false}),
 	})
 	for k, v := range togResp.(sdk.RuntimeResponse).Writes {
 		data[k] = v
 	}
 
-	// Verify custom overlay works in list while santa_hat is disabled.
+	// Verify custom overlay works in list while winter_scarf is disabled.
 	listAfter, _ := handleRequest(context.Background(), sdk.RuntimeRequest{
 		Kind:      "route",
 		Method:    "GET",
@@ -167,8 +167,8 @@ func TestOverlaysPreviewApplyPointsAndAdminCustomCRUD(t *testing.T) {
 		Data:      data,
 	})
 	lBody := string(listAfter.(sdk.RuntimeResponse).Body)
-	if strings.Contains(lBody, "santa_hat") || !strings.Contains(lBody, addOut.ID) {
-		t.Fatalf("expected santa_hat hidden and custom %q present, got %s", addOut.ID, lBody)
+	if strings.Contains(lBody, "winter_scarf") || !strings.Contains(lBody, addOut.ID) {
+		t.Fatalf("expected winter_scarf hidden and custom %q present, got %s", addOut.ID, lBody)
 	}
 
 	delResp, _ := handleRequest(context.Background(), sdk.RuntimeRequest{

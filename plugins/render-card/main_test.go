@@ -40,12 +40,12 @@ func TestAvatarBodyCardAndFallbackEndpoints(t *testing.T) {
 			name := r.URL.Query().Get("name")
 			if name == "Ghost" {
 				_ = json.NewEncoder(w).Encode(map[string]any{
-					"id": 2, "uuid": "00000000000000000000000000000002", "name": "Ghost", "model": "slim", "skinHash": "",
+					"id": 2, "uuid": "00000000-0000-0000-0000-000000000002", "name": "Ghost", "model": "slim", "skinHash": "",
 				})
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id": 1, "uuid": "00000000000000000000000000000001", "name": "Alice", "model": "default",
+				"id": 1, "uuid": "12345678-1234-4234-8234-000000000001", "name": "Alice", "model": "default",
 				"skinHash": hash, "verifiedMinecraft": true, "mcName": "AliceMC",
 			})
 		case r.URL.Path == "/v1/textures/"+hash+"/bytes":
@@ -82,12 +82,12 @@ func TestAvatarBodyCardAndFallbackEndpoints(t *testing.T) {
 		t.Fatalf("unexpected body response: status=%d err=%v bounds=%v", bd.Status, err, bdImg.Bounds())
 	}
 
-	// 3. SVG Card with XML escaping and verified badge.
+	// 3. SVG Card with pure SVG pixel avatar rects (no <image>), normalized UUID, XML escaping, and verified badge.
 	cdResp, _ := handleRequest(context.Background(), sdk.RuntimeRequest{Kind: "route", Method: "GET", Path: "/card", Query: "name=Alice&theme=dark", Settings: settings})
 	cd := cdResp.(sdk.RuntimeResponse)
 	svgBytes, _ := base64.StdEncoding.DecodeString(cd.BodyBase64)
 	svg := string(svgBytes)
-	if cd.Status != 200 || cd.ContentType != "image/svg+xml" || !strings.Contains(svg, "Aether &lt;Skin&gt;") || !strings.Contains(svg, "正版 Minecraft") || strings.Contains(svg, "<script") {
+	if cd.Status != 200 || cd.ContentType != "image/svg+xml" || !strings.Contains(svg, "Aether &lt;Skin&gt;") || !strings.Contains(svg, "正版 Minecraft") || strings.Contains(svg, "<script") || strings.Contains(svg, "<image") || !strings.Contains(svg, `<rect x="30" y="34" width="9" height="9"`) || !strings.Contains(svg, "UUID: 12345678-1234-4234...") {
 		t.Fatalf("unexpected card SVG: %s", svg)
 	}
 

@@ -3,281 +3,256 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>合规校验与内容审核</title>
+<title>合规校验与内容审核控制台</title>
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #fafafa;
+    --bg: transparent;
     --panel: #ffffff;
     --subtle: #f4f4f6;
     --ink: #18181b;
     --muted: #52525b;
     --border: #e4e4e7;
     --accent: #2563eb;
+    --accent-hover: #1d4ed8;
     --accent-soft: rgba(37, 99, 235, 0.12);
+    --btn-text: #ffffff;
     --ok: #15803d;
-    --ok-soft: rgba(21, 128, 61, 0.12);
+    --ok-bg: rgba(22, 163, 74, 0.12);
     --warn: #b45309;
-    --warn-soft: rgba(180, 83, 9, 0.14);
+    --warn-bg: rgba(245, 158, 11, 0.14);
     --danger: #b91c1c;
-    --danger-soft: rgba(185, 28, 28, 0.12);
-    --radius: 10px;
+    --danger-bg: rgba(185, 28, 28, 0.12);
+    --radius: 12px;
+    --radius-ctl: 9px;
+    --shadow: none;
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: var(--font-sans);
   }
   :root[data-theme="dark"] {
-    --bg: #111113;
     --panel: #18181b;
     --subtle: #202024;
     --ink: #f4f4f5;
     --muted: #a1a1aa;
     --border: #2e2e34;
     --accent: #60a5fa;
-    --accent-soft: rgba(96, 165, 250, 0.14);
+    --accent-hover: #3b82f6;
     --ok: #4ade80;
-    --ok-soft: rgba(74, 222, 128, 0.14);
+    --ok-bg: rgba(74, 222, 128, 0.14);
     --warn: #fbbf24;
-    --warn-soft: rgba(251, 191, 36, 0.15);
+    --warn-bg: rgba(251, 191, 36, 0.14);
     --danger: #f87171;
-    --danger-soft: rgba(248, 113, 113, 0.15);
+    --danger-bg: rgba(248, 113, 113, 0.14);
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    padding: 16px;
-    font: 14px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: var(--bg);
-    color: var(--ink);
-  }
-  .stack { display: grid; gap: 16px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-  }
-  .metric-label { font-size: 12px; color: var(--muted); display: block; }
-  .metric-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 4px; }
-  .section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-  h2 { margin: 0; font-size: 15px; font-weight: 600; }
-  .meta { font-size: 12px; color: var(--muted); }
-  .warn-list { margin: 10px 0 0; padding: 10px 14px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 13px; list-style: disc inside; }
-  .form-row { display: grid; grid-template-columns: 160px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
-  @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
-  select, input, button {
-    font: inherit;
-    min-height: 36px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--panel);
-    color: var(--ink);
-    padding: 6px 10px;
-  }
-  button { cursor: pointer; font-weight: 500; transition: border-color 150ms ease, background-color 150ms ease; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button:hover:not(:disabled) { border-color: var(--accent); }
-  button:disabled { opacity: 0.55; cursor: not-allowed; }
-  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-  .test-result { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--subtle); font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-  .badge.allow { background: var(--ok-soft); color: var(--ok); }
-  .badge.review { background: var(--warn-soft); color: var(--warn); }
-  .badge.reject { background: var(--danger-soft); color: var(--danger); }
+  body { margin: 0; padding: 4px; background: transparent; color: var(--ink); font: 14px/1.55 var(--font-sans); }
+  .stack { display: grid; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); display: grid; gap: 12px; }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; font-family: var(--font-display); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .stat { background: var(--subtle); border: 1px solid var(--border); border-radius: var(--radius-ctl); padding: 10px 12px; }
+  .stat span { display: block; font-size: 12px; color: var(--muted); }
+  .stat strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  input, select, button { font: inherit; min-height: 36px; border-radius: var(--radius-ctl); border: 1px solid var(--border); background: var(--panel); color: var(--ink); padding: 6px 10px; }
+  input.grow { flex: 1; min-width: 180px; }
+  button { cursor: pointer; font-weight: 500; transition: background-color 140ms ease, border-color 140ms ease; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--btn-text); }
+  button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .pill { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill.allow { background: var(--ok-bg); color: var(--ok); }
+  .pill.review { background: var(--warn-bg); color: var(--warn); }
+  .pill.reject { background: var(--danger-bg); color: var(--danger); }
+  .notice { padding: 10px 12px; border-radius: var(--radius-ctl); background: var(--subtle); border: 1px solid var(--border); font-size: 13px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  th { font-size: 12px; color: var(--muted); font-weight: 600; }
-  .empty { margin: 0; font-size: 13px; color: var(--muted); }
-  code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .muted { color: var(--muted); font-size: 13px; margin: 0; }
 </style>
 </head>
 <body>
-  <div class="stack">
-    <section class="grid" aria-label="审核统计">
-      <div class="card"><span class="metric-label">已放行</span><div id="stat-allowed" class="metric-value">0</div></div>
-      <div class="card"><span class="metric-label">转人工复核</span><div id="stat-reviewed" class="metric-value">0</div></div>
-      <div class="card"><span class="metric-label">已拦截</span><div id="stat-rejected" class="metric-value">0</div></div>
-      <div class="card"><span class="metric-label">规则配置</span><div id="stat-rules" class="metric-value">0</div></div>
-    </section>
+<div class="stack">
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2>审核策略与拦截统计</h2>
+      <button id="refresh-btn" type="button">刷新</button>
+    </div>
+    <div id="stats" class="grid"></div>
+    <div id="warnings"></div>
+  </section>
 
-    <section class="card">
-      <div class="section-head">
-        <h2>规则即时演练</h2>
-        <span id="config-summary" class="meta">正在读取策略状态</span>
-      </div>
-      <ul id="regex-warnings" class="warn-list" hidden></ul>
-      <form id="test-form" class="form-row">
-        <select id="test-scope" aria-label="审核场景">
-          <option value="texture.upload">材质上传</option>
-          <option value="texture.update">材质资料修改</option>
-          <option value="character.create">创建角色名</option>
-          <option value="character.rename">修改角色名</option>
-          <option value="profile.nickname">修改账号昵称</option>
-        </select>
-        <input id="test-text" type="text" maxlength="500" placeholder="输入测试文本验证当前拦截与复核规则" required />
-        <button id="test-btn" class="primary" type="submit">执行测试</button>
-      </form>
-      <div id="test-result" class="test-result" hidden></div>
-    </section>
+  <section class="card">
+    <h2>文本规则干跑测试</h2>
+    <form id="test-form" class="row">
+      <select id="t-scope">
+        <option value="texture.upload">材质上传</option>
+        <option value="character.create">创建角色</option>
+        <option value="character.rename">角色改名</option>
+        <option value="profile.nickname">个人昵称</option>
+      </select>
+      <input id="t-text" class="grow" type="text" placeholder="输入待检测文本（支持测试全角/符号绕过与正则规则）" />
+      <button id="test-btn" class="primary" type="submit">执行测试</button>
+    </form>
+    <div id="test-out" hidden class="notice"></div>
+  </section>
 
-    <section class="card">
-      <div class="section-head">
-        <h2>近期审核审计日志</h2>
-        <div class="actions">
-          <button id="refresh-btn" type="button">刷新</button>
-          <button id="clear-btn" type="button">清空记录</button>
-        </div>
-      </div>
-      <p id="logs-empty" class="empty">暂无命中或审核日志。</p>
-      <div style="overflow-x:auto">
-        <table id="logs-table" hidden>
-          <thead>
-            <tr>
-              <th>时间</th>
-              <th>场景</th>
-              <th>用户</th>
-              <th>决策</th>
-              <th>规则</th>
-              <th>说明</th>
-            </tr>
-          </thead>
-          <tbody id="logs-body"></tbody>
-        </table>
-      </div>
-    </section>
-  </div>
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2>近期审核记录（最多保留 50 条）</h2>
+      <button id="clear-btn" type="button">清空记录</button>
+    </div>
+    <div style="overflow:auto">
+      <table>
+        <thead><tr><th>时间</th><th>场景</th><th>用户 ID</th><th>决定</th><th>规则或说明</th></tr></thead>
+        <tbody id="logs-body"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
 
 <script>
 (() => {
-  const pending = new Map();
+  const reqMap = new Map();
   let seq = 0;
+
+  function postResize() {
+    window.parent.postMessage({
+      type: 'wishingskin:resize',
+      height: Math.max(260, Math.ceil(document.documentElement.scrollHeight))
+    }, '*');
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(postResize).observe(document.documentElement);
+  }
+  window.addEventListener('load', postResize);
+
+  function applyHostContext(ctx) {
+    if (!ctx || typeof ctx !== 'object') return;
+    document.documentElement.dataset.theme = ctx.theme === 'dark' ? 'dark' : 'light';
+    if (ctx.tokens && typeof ctx.tokens === 'object') {
+      const s = document.documentElement.style;
+      const map = {
+        panel: '--panel', subtle: '--subtle', ink: '--ink', muted: '--muted', border: '--border',
+        accent: '--accent', accentHover: '--accent-hover', accentSoft: '--accent-soft',
+        buttonText: '--btn-text', error: '--danger', errorBg: '--danger-bg',
+        radiusCard: '--radius', radiusControl: '--radius-ctl', shadowCard: '--shadow',
+        fontSans: '--font-sans', fontDisplay: '--font-display'
+      };
+      for (const [k, cssVar] of Object.entries(map)) {
+        if (typeof ctx.tokens[k] === 'string' && ctx.tokens[k]) s.setProperty(cssVar, ctx.tokens[k]);
+      }
+    }
+    if (typeof ctx.fontFaceCss === 'string') {
+      let el = document.getElementById('ws-host-fonts');
+      if (!el) { el = document.createElement('style'); el.id = 'ws-host-fonts'; document.head.appendChild(el); }
+      el.textContent = ctx.fontFaceCss;
+    }
+    requestAnimationFrame(postResize);
+  }
 
   window.addEventListener('message', (event) => {
     const msg = event.data;
     if (!msg || typeof msg !== 'object') return;
-    if (msg.type === 'wishingskin:context' && msg.context) {
-      document.documentElement.dataset.theme = msg.context.theme === 'dark' ? 'dark' : 'light';
-      return;
-    }
-    if (msg.type === 'wishingskin:response' && pending.has(msg.id)) {
-      const entry = pending.get(msg.id);
-      pending.delete(msg.id);
-      clearTimeout(entry.timer);
-      entry.resolve({ status: msg.status, body: msg.body });
+    if (msg.type === 'wishingskin:context' && msg.context) { applyHostContext(msg.context); return; }
+    if (msg.type === 'wishingskin:settings-updated') { void refresh(); return; }
+    if (msg.type === 'wishingskin:response' && reqMap.has(msg.id)) {
+      const h = reqMap.get(msg.id); reqMap.delete(msg.id); clearTimeout(h.t);
+      h.resolve({ status: msg.status, body: msg.body });
     }
   });
 
   function callPlugin(method, path, body) {
-    const id = 'mod-' + (++seq) + '-' + Date.now();
+    const id = 'mod-' + (++seq);
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        pending.delete(id);
-        reject(new Error('请求超时'));
-      }, 10000);
-      pending.set(id, { resolve, reject, timer });
+      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, 10000);
+      reqMap.set(id, { resolve, reject, t });
       window.parent.postMessage({ type: 'wishingskin:request', id, method, path, body }, '*');
     });
   }
 
-  const decisionLabel = { allow: '放行', review: '转复核', reject: '拒绝' };
-
-  function escapeCell(el, value) {
-    el.textContent = value == null ? '' : String(value);
-  }
-
-  function renderStatus(data) {
-    const stats = data.stats || {};
-    document.getElementById('stat-allowed').textContent = String(stats.allowed || 0);
-    document.getElementById('stat-reviewed').textContent = String(stats.reviewed || 0);
-    document.getElementById('stat-rejected').textContent = String(stats.rejected || 0);
-    const totalRules = (data.blockedWordCount || 0) + (data.reviewWordCount || 0) + (data.regexRuleCount || 0);
-    document.getElementById('stat-rules').textContent = String(totalRules);
-
-    const parts = [
-      '处理模式: ' + (data.mode === 'review' ? '材质转复核' : '直接拦截'),
-      '敏感词: ' + (data.blockedWordCount || 0),
-      '复核词: ' + (data.reviewWordCount || 0),
-      '正则: ' + (data.regexRuleCount || 0),
-      data.webhookConfigured ? '外部审核: 已配置' : '外部审核: 未配置'
-    ];
-    document.getElementById('config-summary').textContent = parts.join(' / ');
-
-    const warnEl = document.getElementById('regex-warnings');
-    warnEl.innerHTML = '';
-    const warnings = Array.isArray(data.regexWarnings) ? data.regexWarnings : [];
-    warnEl.hidden = warnings.length === 0;
-    for (const w of warnings) {
-      const li = document.createElement('li');
-      li.textContent = w;
-      warnEl.appendChild(li);
-    }
-
-    const logs = Array.isArray(data.logs) ? data.logs : [];
-    const emptyEl = document.getElementById('logs-empty');
-    const tableEl = document.getElementById('logs-table');
-    const tbody = document.getElementById('logs-body');
-    tbody.innerHTML = '';
-    emptyEl.hidden = logs.length > 0;
-    tableEl.hidden = logs.length === 0;
-
-    for (const item of logs) {
-      const tr = document.createElement('tr');
-      const tdTime = document.createElement('td');
-      tdTime.textContent = item.ts ? new Date(item.ts * 1000).toLocaleString() : '-';
-      const tdScope = document.createElement('td');
-      const code = document.createElement('code');
-      escapeCell(code, item.scope);
-      tdScope.appendChild(code);
-      const tdUser = document.createElement('td');
-      escapeCell(tdUser, item.userId ? '#' + item.userId : '-');
-      const tdDec = document.createElement('td');
-      const badge = document.createElement('span');
-      badge.className = 'badge ' + (item.decision || 'allow');
-      escapeCell(badge, decisionLabel[item.decision] || item.decision);
-      tdDec.appendChild(badge);
-      const tdRule = document.createElement('td');
-      escapeCell(tdRule, item.rule || '-');
-      const tdReason = document.createElement('td');
-      escapeCell(tdReason, item.reason || '-');
-      tr.append(tdTime, tdScope, tdUser, tdDec, tdRule, tdReason);
-      tbody.appendChild(tr);
-    }
+  function makeStat(label, val) {
+    const d = document.createElement('div'); d.className = 'stat';
+    const s = document.createElement('span'); s.textContent = label;
+    const b = document.createElement('strong'); b.textContent = String(val);
+    d.append(s, b);
+    return d;
   }
 
   async function refresh() {
     const res = await callPlugin('GET', '/status');
-    if (res.status === 200) renderStatus(res.body);
+    if (res.status !== 200) return;
+    const d = res.body;
+    const statsEl = document.getElementById('stats');
+    statsEl.innerHTML = '';
+    statsEl.append(
+      makeStat('当前处理模式', d.mode === 'review' ? '材质转人工审核' : '直接拒绝'),
+      makeStat('敏感词条数', d.blockedWordCount || 0),
+      makeStat('人工复核词', d.reviewWordCount || 0),
+      makeStat('正则规则条数', d.regexRuleCount || 0),
+      makeStat('累计放行', (d.stats && d.stats.allowed) || 0),
+      makeStat('转人工审核', (d.stats && d.stats.reviewed) || 0),
+      makeStat('累计拦截', (d.stats && d.stats.rejected) || 0)
+    );
+
+    const warnEl = document.getElementById('warnings');
+    warnEl.innerHTML = '';
+    for (const w of d.regexWarnings || []) {
+      const p = document.createElement('div');
+      p.className = 'notice';
+      p.textContent = w;
+      warnEl.appendChild(p);
+    }
+
+    const tbody = document.getElementById('logs-body');
+    tbody.innerHTML = '';
+    const logs = d.logs || [];
+    if (logs.length === 0) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 5; td.className = 'muted'; td.textContent = '暂无拦截或复核记录';
+      tr.appendChild(td); tbody.appendChild(tr);
+    } else {
+      for (const row of logs) {
+        const tr = document.createElement('tr');
+        const td1 = document.createElement('td'); td1.textContent = row.ts ? new Date(row.ts * 1000).toLocaleString() : '';
+        const td2 = document.createElement('td'); td2.textContent = row.scope || '';
+        const td3 = document.createElement('td'); td3.textContent = String(row.userId || 0);
+        const td4 = document.createElement('td');
+        const pill = document.createElement('span');
+        pill.className = 'pill ' + (row.decision || 'allow');
+        pill.textContent = row.decision === 'reject' ? '拒绝' : (row.decision === 'review' ? '人工审核' : '放行');
+        td4.appendChild(pill);
+        const td5 = document.createElement('td'); td5.textContent = row.reason || row.rule || '';
+        tr.append(td1, td2, td3, td4, td5);
+        tbody.appendChild(tr);
+      }
+    }
+    requestAnimationFrame(postResize);
   }
+
+  document.getElementById('refresh-btn').addEventListener('click', () => void refresh());
 
   document.getElementById('test-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = document.getElementById('test-btn');
-    const box = document.getElementById('test-result');
-    btn.disabled = true;
-    try {
-      const res = await callPlugin('POST', '/test', {
-        scope: document.getElementById('test-scope').value,
-        text: document.getElementById('test-text').value
-      });
-      box.hidden = false;
-      box.innerHTML = '';
-      if (res.status !== 200) {
-        box.textContent = (res.body && res.body.error) || '测试请求失败';
-        return;
-      }
-      const badge = document.createElement('span');
-      badge.className = 'badge ' + (res.body.decision || 'allow');
-      badge.textContent = decisionLabel[res.body.decision] || res.body.decision;
-      const meta = document.createElement('span');
-      meta.textContent = (res.body.rule ? '命中规则: ' + res.body.rule + ' / ' : '') + (res.body.reason || '未命中任何违规规则');
-      box.append(badge, meta);
-    } finally {
-      btn.disabled = false;
+    const out = document.getElementById('test-out');
+    out.hidden = false;
+    out.textContent = '正在执行本地词表、正则及外部接口测试…';
+    const res = await callPlugin('POST', '/test', {
+      scope: document.getElementById('t-scope').value,
+      text: document.getElementById('t-text').value
+    });
+    if (res.status !== 200) {
+      out.textContent = (res.body && res.body.error) || '测试请求失败';
+    } else {
+      const label = res.body.decision === 'reject' ? '拒绝' : (res.body.decision === 'review' ? '转人工审核' : '放行');
+      out.textContent = '判定结果：' + label + (res.body.rule ? '（规则 ' + res.body.rule + '）' : '') + (res.body.reason ? '  说明：' + res.body.reason : '');
     }
+    requestAnimationFrame(postResize);
   });
 
-  document.getElementById('refresh-btn').addEventListener('click', () => void refresh());
   document.getElementById('clear-btn').addEventListener('click', async () => {
-    const res = await callPlugin('POST', '/clear-logs', {});
-    if (res.status === 200) await refresh();
+    await callPlugin('POST', '/clear-logs');
+    await refresh();
   });
 
   void refresh();

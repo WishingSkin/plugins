@@ -3,335 +3,329 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>AI 皮肤工坊管理控制台</title>
+<title>AI 皮肤工坊管理与测试</title>
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #fafafa;
+    --bg: transparent;
     --panel: #ffffff;
     --subtle: #f4f4f6;
     --ink: #18181b;
     --muted: #52525b;
     --border: #e4e4e7;
     --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-soft: rgba(37, 99, 235, 0.12);
+    --btn-text: #ffffff;
     --ok: #15803d;
-    --ok-soft: rgba(21, 128, 61, 0.12);
-    --warn: #b45309;
-    --warn-soft: rgba(180, 83, 9, 0.14);
+    --ok-bg: rgba(22, 163, 74, 0.12);
     --danger: #b91c1c;
-    --danger-soft: rgba(185, 28, 28, 0.12);
-    --radius: 10px;
+    --danger-bg: rgba(185, 28, 28, 0.12);
+    --radius: 12px;
+    --radius-ctl: 9px;
+    --shadow: none;
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: var(--font-sans);
   }
   :root[data-theme="dark"] {
-    --bg: #111113;
     --panel: #18181b;
     --subtle: #202024;
     --ink: #f4f4f5;
     --muted: #a1a1aa;
     --border: #2e2e34;
     --accent: #60a5fa;
+    --accent-hover: #3b82f6;
     --ok: #4ade80;
-    --ok-soft: rgba(74, 222, 128, 0.14);
-    --warn: #fbbf24;
-    --warn-soft: rgba(251, 191, 36, 0.15);
+    --ok-bg: rgba(74, 222, 128, 0.14);
     --danger: #f87171;
-    --danger-soft: rgba(248, 113, 113, 0.15);
+    --danger-bg: rgba(248, 113, 113, 0.14);
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    padding: 16px;
-    font: 14px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: var(--bg);
-    color: var(--ink);
-  }
-  .stack { display: grid; gap: 16px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-  .engine-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-    display: grid;
-    gap: 10px;
-  }
-  .metric-label { font-size: 12px; color: var(--muted); }
-  .metric-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
-  h2 { margin: 0; font-size: 15px; font-weight: 600; }
-  .form-row { display: grid; grid-template-columns: 180px minmax(0, 1fr) 120px auto; gap: 10px; align-items: center; }
-  @media (max-width: 680px) { .form-row { grid-template-columns: 1fr; } }
-  select, input, button {
-    font: inherit;
-    min-height: 36px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--panel);
-    color: var(--ink);
-    padding: 6px 10px;
-  }
-  button { cursor: pointer; font-weight: 500; transition: border-color 150ms ease; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button:hover:not(:disabled) { border-color: var(--accent); }
+  body { margin: 0; padding: 4px; background: transparent; color: var(--ink); font: 14px/1.55 var(--font-sans); }
+  .stack { display: grid; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); display: grid; gap: 12px; }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; font-family: var(--font-display); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .stat { background: var(--subtle); border: 1px solid var(--border); border-radius: var(--radius-ctl); padding: 10px 12px; }
+  .stat span { display: block; font-size: 12px; color: var(--muted); }
+  .stat strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .engine-list { display: grid; gap: 8px; }
+  .eng-item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--subtle); }
+  .eng-meta { display: grid; gap: 2px; }
+  .eng-meta small { color: var(--muted); font-size: 12px; }
+  .pill { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill.ok { background: var(--ok-bg); color: var(--ok); }
+  .pill.off { background: var(--subtle); color: var(--muted); border: 1px solid var(--border); }
+  .pill.err { background: var(--danger-bg); color: var(--danger); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  input, select, button { font: inherit; min-height: 36px; border-radius: var(--radius-ctl); border: 1px solid var(--border); background: var(--panel); color: var(--ink); padding: 6px 10px; }
+  input.grow { flex: 1; min-width: 200px; }
+  button { cursor: pointer; font-weight: 500; transition: background-color 140ms ease, border-color 140ms ease; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--btn-text); }
+  button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
   button:disabled { opacity: 0.55; cursor: not-allowed; }
-  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-  .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-  .badge.ok { background: var(--ok-soft); color: var(--ok); }
-  .badge.warn { background: var(--warn-soft); color: var(--warn); }
-  .badge.err { background: var(--danger-soft); color: var(--danger); }
-  .engine-item {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px;
-    background: var(--subtle);
-    display: grid;
-    gap: 6px;
-  }
-  .status { font-size: 12px; color: var(--muted); margin: 0; }
-  .test-box {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 14px;
-    padding: 12px;
-    border-radius: 8px;
-    background: var(--subtle);
-  }
-  .test-box img { width: 48px; height: 96px; image-rendering: pixelated; }
+  .preview-box { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--subtle); }
+  .preview-box img { width: 48px; height: 96px; image-rendering: pixelated; border-radius: 6px; background: var(--panel); border: 1px solid var(--border); }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
-  th { font-size: 12px; color: var(--muted); font-weight: 600; }
-  pre {
-    margin: 0;
-    padding: 12px;
-    border-radius: 8px;
-    background: var(--subtle);
-    border: 1px solid var(--border);
-    font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
-    overflow-x: auto;
-  }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .muted { color: var(--muted); font-size: 13px; margin: 0; }
 </style>
 </head>
 <body>
 <div class="stack">
-  <section class="grid" aria-label="生成统计">
-    <div class="card"><span class="metric-label">累计生成成功</span><div id="s-gen" class="metric-value">0</div></div>
-    <div class="card"><span class="metric-label">失败次数</span><div id="s-fail" class="metric-value">0</div></div>
-    <div class="card"><span class="metric-label">保存入库</span><div id="s-save" class="metric-value">0</div></div>
-    <div class="card"><span class="metric-label">今日请求 / 进行中</span><div id="s-today" class="metric-value">0 / 0</div></div>
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2>AI 皮肤工坊运行概览</h2>
+      <button id="refresh-btn" type="button">刷新</button>
+    </div>
+    <div id="stats" class="grid"></div>
+    <div id="engines" class="engine-list"></div>
   </section>
 
   <section class="card">
-    <div class="head">
-      <h2>AI 引擎状态（零本机 GPU 部署架构）</h2>
-      <span id="policy-meta" class="status">读取中</span>
-    </div>
-    <div id="engine-grid" class="engine-grid"></div>
-  </section>
-
-  <section class="card">
-    <div class="head">
-      <h2>连通性与 UV 质检测试</h2>
-      <span class="status">测试请求不会扣减积分</span>
-    </div>
-    <form id="test-form" class="form-row">
-      <select id="test-engine" aria-label="测试引擎"></select>
-      <input id="test-prompt" type="text" maxlength="200" value="银发蓝瞳少年穿着白色科技卫衣" placeholder="测试角色描述" />
-      <select id="test-model" aria-label="手臂模型">
+    <h2>连通性测试</h2>
+    <p class="muted">管理员干跑测试不消耗个人每日额度，且不扣除站点积分。修改插件设置保存后将自动同步此处状态。</p>
+    <form id="test-form" class="row">
+      <select id="t-engine"></select>
+      <input id="t-prompt" class="grow" type="text" value="银发蓝瞳少年穿着白色科技卫衣" maxlength="200" placeholder="输入皮肤测试描述" />
+      <select id="t-model">
         <option value="default">Steve (4px)</option>
         <option value="slim">Alex (3px)</option>
       </select>
       <button id="test-btn" class="primary" type="submit">执行测试</button>
     </form>
-    <div id="test-result" class="test-box" hidden></div>
+    <div id="test-result" hidden class="preview-box"></div>
   </section>
 
   <section class="card">
-    <div class="head">
+    <div class="row" style="justify-content:space-between">
       <h2>近期生成记录（最多保留 50 条）</h2>
-      <div class="actions">
-        <button id="refresh-btn" type="button">刷新</button>
-        <button id="clear-btn" type="button">清空记录</button>
-      </div>
+      <button id="clear-btn" type="button">清空记录</button>
     </div>
-    <p id="logs-empty" class="status">暂无生成记录。</p>
-    <div style="overflow-x:auto">
-      <table id="logs-table" hidden>
-        <thead>
-          <tr><th>时间</th><th>用户 ID</th><th>引擎</th><th>状态</th><th>耗时</th><th>摘要或错误</th></tr>
-        </thead>
+    <div style="overflow:auto">
+      <table>
+        <thead><tr><th>时间</th><th>用户 ID</th><th>引擎</th><th>状态</th><th>耗时</th><th>摘要或错误</th></tr></thead>
         <tbody id="logs-body"></tbody>
       </table>
     </div>
-  </section>
-
-  <section class="card">
-    <h2>自定义外部算力节点（async_worker）接入契约</h2>
-    <pre>POST &lt;配置的 worker_url&gt;
-Authorization: Bearer &lt;可选 worker_secret&gt;
-Content-Type: application/json
-
-{ "prompt": "...", "model": "default", "style": "anime", "width": 64, "height": 64 }
-
-// 同步返回：直接响应 image/png，或 JSON { "status": "succeeded", "pngBase64": "..." }
-// 异步队列：HTTP 200/202 { "id": "task_1", "status": "queued", "pollUrl": "https://.../jobs/task_1" }
-// 插件将以 64×64 Minecraft UV 掩码自动清洗并校验覆盖率，不合格不扣费。</pre>
   </section>
 </div>
 
 <script>
 (() => {
-  const pending = new Map();
+  const reqMap = new Map();
   let seq = 0;
+
+  function postResize() {
+    window.parent.postMessage({
+      type: 'wishingskin:resize',
+      height: Math.max(280, Math.ceil(document.documentElement.scrollHeight))
+    }, '*');
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(postResize).observe(document.documentElement);
+  }
+  window.addEventListener('load', postResize);
+
+  function applyHostContext(ctx) {
+    if (!ctx || typeof ctx !== 'object') return;
+    document.documentElement.dataset.theme = ctx.theme === 'dark' ? 'dark' : 'light';
+    if (ctx.tokens && typeof ctx.tokens === 'object') {
+      const s = document.documentElement.style;
+      const map = {
+        panel: '--panel',
+        subtle: '--subtle',
+        ink: '--ink',
+        muted: '--muted',
+        border: '--border',
+        accent: '--accent',
+        accentHover: '--accent-hover',
+        accentSoft: '--accent-soft',
+        buttonText: '--btn-text',
+        error: '--danger',
+        errorBg: '--danger-bg',
+        radiusCard: '--radius',
+        radiusControl: '--radius-ctl',
+        shadowCard: '--shadow',
+        fontSans: '--font-sans',
+        fontDisplay: '--font-display'
+      };
+      for (const [k, cssVar] of Object.entries(map)) {
+        if (typeof ctx.tokens[k] === 'string' && ctx.tokens[k]) s.setProperty(cssVar, ctx.tokens[k]);
+      }
+    }
+    if (typeof ctx.fontFaceCss === 'string') {
+      let el = document.getElementById('ws-host-fonts');
+      if (!el) {
+        el = document.createElement('style');
+        el.id = 'ws-host-fonts';
+        document.head.appendChild(el);
+      }
+      el.textContent = ctx.fontFaceCss;
+    }
+    requestAnimationFrame(postResize);
+  }
 
   window.addEventListener('message', (event) => {
     const msg = event.data;
     if (!msg || typeof msg !== 'object') return;
     if (msg.type === 'wishingskin:context' && msg.context) {
-      document.documentElement.dataset.theme = msg.context.theme === 'dark' ? 'dark' : 'light';
+      applyHostContext(msg.context);
       return;
     }
-    if (msg.type === 'wishingskin:response' && pending.has(msg.id)) {
-      const h = pending.get(msg.id); pending.delete(msg.id); clearTimeout(h.t);
+    if (msg.type === 'wishingskin:settings-updated') {
+      void refresh();
+      return;
+    }
+    if (msg.type === 'wishingskin:response' && reqMap.has(msg.id)) {
+      const h = reqMap.get(msg.id); reqMap.delete(msg.id); clearTimeout(h.t);
       h.resolve({ status: msg.status, body: msg.body });
     }
   });
 
-  function callPlugin(method, path, body) {
+  function callPlugin(method, path, body, timeoutMs = 15000) {
     const id = 'aia-' + (++seq);
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => { pending.delete(id); reject(new Error('请求超时')); }, 65000);
-      pending.set(id, { resolve, reject, t });
+      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, timeoutMs);
+      reqMap.set(id, { resolve, reject, t });
       window.parent.postMessage({ type: 'wishingskin:request', id, method, path, body }, '*');
     });
   }
 
-  function renderStatus(data) {
-    const stats = data.stats || {};
-    document.getElementById('s-gen').textContent = String(stats.totalGenerated || 0);
-    document.getElementById('s-fail').textContent = String(stats.totalFailed || 0);
-    document.getElementById('s-save').textContent = String(stats.totalSaved || 0);
-    document.getElementById('s-today').textContent = (data.todayTotal || 0) + ' / ' + (data.activeJobs || 0);
-    document.getElementById('policy-meta').textContent =
-      '默认引擎：' + (data.defaultEngine || '无可用引擎') + ' / 每日上限：' + (data.dailyLimit || 0) + ' 次 / 单次积分：' + (data.pointsCost || 0);
-
-    const grid = document.getElementById('engine-grid');
-    const sel = document.getElementById('test-engine');
-    const prev = sel.value;
-    grid.innerHTML = '';
-    sel.innerHTML = '';
-    const engines = Array.isArray(data.engines) ? data.engines : [];
-    for (const e of engines) {
-      const box = document.createElement('div');
-      box.className = 'engine-item';
-      const top = document.createElement('div');
-      top.className = 'head';
-      const name = document.createElement('strong');
-      name.textContent = e.label;
-      const badge = document.createElement('span');
-      badge.className = 'badge ' + (e.configured ? 'ok' : 'warn');
-      badge.textContent = e.configured ? '已启用' : '未配置';
-      top.append(name, badge);
-      const hint = document.createElement('p');
-      hint.className = 'status';
-      hint.textContent = e.hint;
-      box.append(top, hint);
-      grid.appendChild(box);
-
-      if (e.configured) {
-        const opt = document.createElement('option');
-        opt.value = e.id;
-        opt.textContent = e.label;
-        sel.appendChild(opt);
-      }
-    }
-    if (prev) sel.value = prev;
-    else if (data.defaultEngine) sel.value = data.defaultEngine;
-    document.getElementById('test-btn').disabled = sel.options.length === 0;
-
-    const logs = Array.isArray(data.logs) ? data.logs : [];
-    const empty = document.getElementById('logs-empty');
-    const table = document.getElementById('logs-table');
-    const tbody = document.getElementById('logs-body');
-    tbody.innerHTML = '';
-    empty.hidden = logs.length > 0;
-    table.hidden = logs.length === 0;
-    for (const item of logs) {
-      const tr = document.createElement('tr');
-      const cells = [
-        item.time || '',
-        String(item.userId || 0),
-        item.engine || '',
-        item.status === 'succeeded' ? '成功' : '失败',
-        (item.durationMs || 0) + ' ms',
-        item.detail || ''
-      ];
-      cells.forEach((text, idx) => {
-        const td = document.createElement('td');
-        if (idx === 3) {
-          const b = document.createElement('span');
-          b.className = 'badge ' + (item.status === 'succeeded' ? 'ok' : 'err');
-          b.textContent = text;
-          td.appendChild(b);
-        } else {
-          td.textContent = text;
-        }
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    }
+  function makeStat(label, val) {
+    const d = document.createElement('div'); d.className = 'stat';
+    const s = document.createElement('span'); s.textContent = label;
+    const b = document.createElement('strong'); b.textContent = String(val);
+    d.append(s, b);
+    return d;
   }
 
   async function refresh() {
     const res = await callPlugin('GET', '/admin/status');
-    if (res.status === 200) renderStatus(res.body);
+    if (res.status !== 200) return;
+    const d = res.body;
+
+    const statsEl = document.getElementById('stats');
+    statsEl.innerHTML = '';
+    statsEl.append(
+      makeStat('进行中任务', d.activeJobs || 0),
+      makeStat('今日已生成', d.todayTotal || 0),
+      makeStat('累计成功', (d.stats && d.stats.totalGenerated) || 0),
+      makeStat('累计失败', (d.stats && d.stats.totalFailed) || 0),
+      makeStat('保存入库次数', (d.stats && d.stats.totalSaved) || 0)
+    );
+
+    const engEl = document.getElementById('engines');
+    const selEl = document.getElementById('t-engine');
+    const prevVal = selEl.value;
+    engEl.innerHTML = '';
+    selEl.innerHTML = '';
+    for (const eng of d.engines || []) {
+      const item = document.createElement('div'); item.className = 'eng-item';
+      const meta = document.createElement('div'); meta.className = 'eng-meta';
+      const title = document.createElement('strong');
+      title.textContent = eng.label + (d.defaultEngine === eng.id ? '（当前默认）' : '');
+      const hint = document.createElement('small'); hint.textContent = eng.hint;
+      meta.append(title, hint);
+      const pill = document.createElement('span');
+      pill.className = 'pill ' + (eng.configured ? 'ok' : 'off');
+      pill.textContent = eng.configured ? '已就绪' : '未配置';
+      item.append(meta, pill);
+      engEl.appendChild(item);
+
+      if (eng.configured) {
+        const opt = document.createElement('option');
+        opt.value = eng.id;
+        opt.textContent = eng.label;
+        selEl.appendChild(opt);
+      }
+    }
+    if (prevVal && [...selEl.options].some(o => o.value === prevVal)) {
+      selEl.value = prevVal;
+    } else if (d.defaultEngine && [...selEl.options].some(o => o.value === d.defaultEngine)) {
+      selEl.value = d.defaultEngine;
+    }
+    if (selEl.options.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '暂无可用引擎（请先保存配置）';
+      selEl.appendChild(opt);
+    }
+
+    const tbody = document.getElementById('logs-body');
+    tbody.innerHTML = '';
+    const logs = d.logs || [];
+    if (logs.length === 0) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 6; td.className = 'muted'; td.textContent = '暂无生成日志';
+      tr.appendChild(td); tbody.appendChild(tr);
+    } else {
+      for (const row of logs) {
+        const tr = document.createElement('tr');
+        const td1 = document.createElement('td'); td1.textContent = row.time || '';
+        const td2 = document.createElement('td'); td2.textContent = String(row.userId || 0);
+        const td3 = document.createElement('td'); td3.textContent = row.engine || '';
+        const td4 = document.createElement('td');
+        const pill = document.createElement('span');
+        pill.className = 'pill ' + (row.status === 'succeeded' ? 'ok' : 'err');
+        pill.textContent = row.status === 'succeeded' ? '成功' : '失败';
+        td4.appendChild(pill);
+        const td5 = document.createElement('td'); td5.textContent = (row.durationMs || 0) + ' ms';
+        const td6 = document.createElement('td'); td6.textContent = row.detail || '';
+        tr.append(td1, td2, td3, td4, td5, td6);
+        tbody.appendChild(tr);
+      }
+    }
+    requestAnimationFrame(postResize);
   }
+
+  document.getElementById('refresh-btn').addEventListener('click', () => void refresh());
 
   document.getElementById('test-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const eng = document.getElementById('t-engine').value;
+    const outBox = document.getElementById('test-result');
+    if (!eng) {
+      outBox.hidden = false;
+      outBox.textContent = '请先配置并保存至少一种引擎（或启用内置演示模式）。';
+      return;
+    }
     const btn = document.getElementById('test-btn');
-    const box = document.getElementById('test-result');
-    btn.disabled = true;
-    box.hidden = false;
-    box.textContent = '正在执行测试请求…';
+    btn.disabled = true; btn.textContent = '测试中…';
+    outBox.hidden = false; outBox.textContent = '正在请求引擎并验证 64×64 UV…';
     try {
       const res = await callPlugin('POST', '/admin/test', {
-        engine: document.getElementById('test-engine').value,
-        prompt: document.getElementById('test-prompt').value,
-        model: document.getElementById('test-model').value
-      });
-      box.innerHTML = '';
-      if (res.status !== 200 || !res.body.ok) {
-        const b = document.createElement('span');
-        b.className = 'badge err';
-        b.textContent = '失败';
-        const txt = document.createElement('span');
-        txt.textContent = (res.body && res.body.error) || '测试失败';
-        box.append(b, txt);
-        return;
-      }
-      const b = document.createElement('span');
-      b.className = 'badge ok';
-      b.textContent = '通过 (' + (res.body.durationMs || 0) + ' ms)';
-      if (res.body.frontPreviewBase64) {
+        engine: eng,
+        prompt: document.getElementById('t-prompt').value.trim(),
+        model: document.getElementById('t-model').value
+      }, 190000);
+      outBox.innerHTML = '';
+      if (res.status !== 200 || !res.body || !res.body.ok) {
+        outBox.textContent = '测试失败（' + ((res.body && res.body.durationMs) || 0) + ' ms）：' + ((res.body && (res.body.error || res.body.message)) || '未知错误');
+      } else {
         const img = document.createElement('img');
         img.src = 'data:image/png;base64,' + res.body.frontPreviewBase64;
-        img.alt = '测试结果预览';
-        box.appendChild(img);
+        img.alt = '测试立绘';
+        const meta = document.createElement('div');
+        meta.innerHTML = '<strong>测试通过（' + res.body.durationMs + ' ms）</strong>';
+        const p = document.createElement('p'); p.className = 'muted'; p.textContent = res.body.summary || 'UV 校验已通过';
+        meta.appendChild(p);
+        outBox.append(img, meta);
       }
-      const summary = document.createElement('span');
-      summary.textContent = res.body.summary || 'UV 校验通过';
-      box.append(b, summary);
+      await refresh();
+    } catch (err) {
+      outBox.textContent = err.message || '请求失败';
     } finally {
-      btn.disabled = false;
+      btn.disabled = false; btn.textContent = '执行测试';
+      requestAnimationFrame(postResize);
     }
   });
 
-  document.getElementById('refresh-btn').addEventListener('click', () => void refresh());
   document.getElementById('clear-btn').addEventListener('click', async () => {
-    await callPlugin('POST', '/admin/clear-logs', {});
-    void refresh();
+    await callPlugin('POST', '/admin/clear-logs');
+    await refresh();
   });
 
   void refresh();
