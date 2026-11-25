@@ -1,0 +1,9 @@
+/dist/
+/bin/
+*.zip
+*.exe
+node_modules/
+.env
+.env.*
+*.log
+.claude/
