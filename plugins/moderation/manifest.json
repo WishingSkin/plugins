@@ -1,0 +1,31 @@
+{
+  "manifest": {
+    "id": "wishingskin.moderation",
+    "name": "合规校验与内容审核",
+    "description": "为角色名、昵称与材质上传提供同步敏感词、正则规则、图像健康度检测与外部审核接口校验。",
+    "version": "0.1.0",
+    "settingsNamespace": "wishingskin.moderation",
+    "migrationVersion": 0,
+    "permissions": ["hooks", "hooks.image", "routes.admin", "frontend", "database"],
+    "settings": [
+      { "key": "mode", "label": "命中处理模式（block 拒绝 / review 材质转人工审核）", "type": "text" },
+      { "key": "blocked_words", "label": "敏感词列表（逗号或换行分隔）", "type": "text" },
+      { "key": "review_words", "label": "人工复核词列表（逗号或换行分隔）", "type": "text" },
+      { "key": "regex_rules", "label": "正则拦截规则（每行一条 RE2 表达式，最多 32 条）", "type": "text" },
+      { "key": "reject_blank_skin", "label": "拦截有效像素过少的透明空白材质", "type": "boolean" },
+      { "key": "reject_solid_skin", "label": "纯单色材质自动转入人工审核", "type": "boolean" },
+      { "key": "webhook_url", "label": "外部内容审核接口 URL（可选，支持 HTTPS 或本机回环 HTTP）", "type": "text" },
+      { "key": "webhook_secret", "label": "外部审核接口密钥（可选，作为 Bearer Token 发送）", "type": "secret" },
+      { "key": "webhook_fail_policy", "label": "外部接口异常回退策略（allow 放行 / review 转审核 / reject 拒绝）", "type": "text" },
+      { "key": "webhook_send_image", "label": "调用外部审核接口时附带上传图片 Base64", "type": "boolean" }
+    ]
+  },
+  "protocol": 2,
+  "hooks": ["text.check", "texture.upload.check"],
+  "routes": [
+    { "method": "GET", "path": "/status", "access": "admin" },
+    { "method": "POST", "path": "/test", "access": "admin" },
+    { "method": "POST", "path": "/clear-logs", "access": "admin" }
+  ],
+  "frontend": "admin.html"
+}

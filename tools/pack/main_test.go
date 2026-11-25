@@ -2,7 +2,10 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -182,5 +185,121 @@ func TestUpsertCatalogSortsAndUpdatesEntries(t *testing.T) {
 		ID: "wishingskin.bad", Version: "0.1.0", URL: "http://example.com/bad.zip", SHA256: digestA,
 	}); err == nil {
 		t.Fatal("expected non-https non-loopback catalog URL to fail")
+	}
+}
+
+func TestV2ManifestValidationAndSigning(t *testing.T) {
+	fakeBuilder := func(_ context.Context, _, _, goos, goarch, outPath string) error {
+		return os.WriteFile(outPath, []byte("v2-"+goos+"-"+goarch), 0o755)
+	}
+
+	root := t.TempDir()
+	// Protocol 1 must reject v2 permissions, hooks, and userFrontends.
+	badV1 := filepath.Join(root, "plugins", "badv1")
+	if err := os.MkdirAll(badV1, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	badManifest := `{
+  "manifest": {
+    "id": "community.badv1",
+    "version": "0.1.0",
+    "settingsNamespace": "community.badv1",
+    "permissions": ["hooks"]
+  },
+  "protocol": 1,
+  "hooks": ["text.check"]
+}`
+	if err := os.WriteFile(filepath.Join(badV1, "manifest.json"), []byte(badManifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := packPlugin(context.Background(), badV1, filepath.Join(root, "dist"), []string{"linux/amd64"}, fakeBuilder); err == nil {
+		t.Fatal("expected protocol 1 with v2 permission to fail")
+	}
+
+	// Valid protocol 2 official package with hooks, userFrontends, and deterministic Ed25519 signature.
+	v2Dir := filepath.Join(root, "plugins", "v2demo")
+	if err := os.MkdirAll(v2Dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	v2Manifest := `{
+  "manifest": {
+    "id": "wishingskin.v2demo",
+    "name": "V2 Demo",
+    "version": "0.1.0",
+    "settingsNamespace": "wishingskin.v2demo",
+    "permissions": ["routes.user", "hooks", "hooks.image", "user.frontend", "host.textures.read"]
+  },
+  "protocol": 2,
+  "routes": [{"method": "GET", "path": "/info", "access": "user"}],
+  "hooks": ["text.check", "texture.upload.check"],
+  "userFrontends": [
+    {"id": "tool", "label": "Tool", "slot": "user.tools", "path": "tool.html"},
+    {"id": "act", "label": "Skin Action", "slot": "texture.action", "path": "action.html", "kinds": ["skin"]}
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(v2Dir, "manifest.json"), []byte(v2Manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(v2Dir, "tool.html"), []byte("<h1>Tool</h1>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(v2Dir, "action.html"), []byte("<h1>Action</h1>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// -require-sign without key must fail.
+	if _, err := packPluginWithOptions(context.Background(), v2Dir, filepath.Join(root, "dist"), []string{"linux/amd64"}, fakeBuilder, PackOptions{RequireSign: true}); err == nil {
+		t.Fatal("expected -require-sign without key to fail")
+	}
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub2, _, _ := ed25519.GenerateKey(rand.Reader)
+	seedHex := hex.EncodeToString(priv.Seed())
+
+	res1, err := packPluginWithOptions(context.Background(), v2Dir, filepath.Join(root, "dist"), []string{"linux/amd64"}, fakeBuilder, PackOptions{SigningKey: seedHex, RequireSign: true})
+	if err != nil {
+		t.Fatalf("signed pack failed: %v", err)
+	}
+	res2, err := packPluginWithOptions(context.Background(), v2Dir, filepath.Join(root, "dist"), []string{"linux/amd64"}, fakeBuilder, PackOptions{SigningKey: seedHex, RequireSign: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res1.Signed || res1.SHA256 != res2.SHA256 {
+		t.Fatalf("expected deterministic signed build, got res1=%+v res2=%+v", res1, res2)
+	}
+
+	zipBytes, err := os.ReadFile(res1.File)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifyArchiveSignature(zipBytes, pub); err != nil {
+		t.Fatalf("verifyArchiveSignature failed: %v", err)
+	}
+	if _, err := verifyArchiveSignature(zipBytes, pub2); err == nil {
+		t.Fatal("expected wrong public key to fail verification")
+	}
+
+	// Tamper tool.html and verify signature rejects.
+	zr, _ := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	var tampered bytes.Buffer
+	zw := zip.NewWriter(&tampered)
+	for _, f := range zr.File {
+		rc, _ := f.Open()
+		var data bytes.Buffer
+		_, _ = data.ReadFrom(rc)
+		rc.Close()
+		w, _ := zw.Create(f.Name)
+		if f.Name == "tool.html" {
+			_, _ = w.Write([]byte("<h1>Tampered</h1>"))
+		} else {
+			_, _ = w.Write(data.Bytes())
+		}
+	}
+	_ = zw.Close()
+	if _, err := verifyArchiveSignature(tampered.Bytes(), pub); err == nil {
+		t.Fatal("expected tampered archive to fail signature check")
 	}
 }

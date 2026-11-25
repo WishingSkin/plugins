@@ -31,6 +31,8 @@ jobs:
           cache: true
       - name: Resolve plugin metadata and build archive
         id: pack
+        env:
+          WS_PLUGIN_SIGNING_KEY: ${{ secrets.WS_PLUGIN_SIGNING_KEY }}
         shell: bash
         run: |
           set -euo pipefail
@@ -45,12 +47,21 @@ jobs:
           fi
           MANIFEST="plugins/${PLUGIN_DIR}/manifest.json"
           test -f "${MANIFEST}"
+          MANIFEST_ID="$(jq -r '.manifest.id' "${MANIFEST}")"
           MANIFEST_VER="$(jq -r '.manifest.version' "${MANIFEST}")"
           if [ "${MANIFEST_VER}" != "${VERSION}" ]; then
             echo "manifest.json version (${MANIFEST_VER}) does not match tag version (${VERSION})" >&2
             exit 1
           fi
-          OUT="$(go run ./tools/pack pack -dir "plugins/${PLUGIN_DIR}" -out dist)"
+          SIGN_ARGS=()
+          if [[ "${MANIFEST_ID}" == wishingskin.* ]]; then
+            if [ -z "${WS_PLUGIN_SIGNING_KEY:-}" ]; then
+              echo "WS_PLUGIN_SIGNING_KEY secret is required to sign official plugin ${MANIFEST_ID}" >&2
+              exit 1
+            fi
+            SIGN_ARGS=(-require-sign)
+          fi
+          OUT="$(go run ./tools/pack pack -dir "plugins/${PLUGIN_DIR}" -out dist "${SIGN_ARGS[@]+"${SIGN_ARGS[@]}"}")"
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
           echo "id=$(echo "${OUT}" | jq -r '.id')" >> "${GITHUB_OUTPUT}"
           echo "name=$(echo "${OUT}" | jq -r '.name')" >> "${GITHUB_OUTPUT}"

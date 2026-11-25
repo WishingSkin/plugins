@@ -44,10 +44,16 @@ https://wishingskin.github.io/plugins/catalog.json
 go vet ./...
 go test -count=1 ./...
 
-# 交叉编译并生成可导入 WishingSkin 后台的 ZIP 插件包
-go run ./tools/pack pack -dir plugins/<plugin> -out dist
+# 生成 Ed25519 官方签名密钥对
+go run ./tools/pack keygen
+
+# 交叉编译并生成可导入 WishingSkin 后台的签名 ZIP 插件包
+go run ./tools/pack pack -dir plugins/<plugin> -out dist -sign-key <seed> -require-sign
+
+# 校验插件包官方签名
+go run ./tools/pack verify -file dist/<plugin>-<version>.zip -pubkey <pub>
 ```
 
 ## 发布规范
 
-每个插件独立使用 `<plugin-dir>-v<semver>` 格式 Git Tag（例如 `moderation-v0.1.0`）触发 `.github/workflows/release-plugin.yml`，自动构建多平台 ZIP 包、计算 SHA-256、发布 GitHub Release 并更新 `catalog/catalog.json`。
+每个插件独立使用 `<plugin-dir>-v<semver>` 格式 Git Tag（例如 `moderation-v0.1.0`）触发 `.github/workflows/release-plugin.yml`，使用仓库 Secret `WS_PLUGIN_SIGNING_KEY` 对官方 `wishingskin.*` 插件包进行 Ed25519 签名、构建多平台 ZIP 包、计算 SHA-256、发布 GitHub Release 并更新 `catalog/catalog.json`。
