@@ -1,0 +1,43 @@
+{
+  "manifest": {
+    "id": "wishingskin.server-sync",
+    "name": "社群与游戏服务器联动",
+    "description": "将站点角色、材质与正版验证事件推送至 Discord / KOOK / 游戏服务器 Webhook，并提供服务端鉴权查询接口。",
+    "version": "0.1.0",
+    "settingsNamespace": "wishingskin.server-sync",
+    "migrationVersion": 0,
+    "permissions": [
+      "events",
+      "routes.public",
+      "routes.admin",
+      "frontend",
+      "database",
+      "host.public.read",
+      "host.users.read"
+    ],
+    "events": [
+      "character.create",
+      "character.rename",
+      "character.delete",
+      "texture.upload",
+      "minecraft.link",
+      "minecraft.unlink"
+    ],
+    "settings": [
+      { "key": "target_type", "label": "推送目标格式（generic 通用 JSON / discord / kook）", "type": "text" },
+      { "key": "webhook_url", "label": "目标推送地址（支持 HTTPS 或本机回环 HTTP）", "type": "text" },
+      { "key": "webhook_secret", "label": "推送签名密钥（通用模式计算 HMAC-SHA256，KOOK 模式作为 Bot Token）", "type": "secret" },
+      { "key": "kook_channel_id", "label": "KOOK 目标频道 ID（仅 target_type 为 kook 时必填）", "type": "text" },
+      { "key": "enabled_events", "label": "允许推送的事件（逗号分隔，留空推送全部已订阅事件）", "type": "text" },
+      { "key": "server_api_key", "label": "游戏服务端查询密钥（用于 POST /query 鉴权，建议 32 位以上随机字符串）", "type": "secret" }
+    ]
+  },
+  "protocol": 2,
+  "routes": [
+    { "method": "POST", "path": "/query", "access": "public" },
+    { "method": "GET", "path": "/status", "access": "admin" },
+    { "method": "POST", "path": "/test-notify", "access": "admin" },
+    { "method": "POST", "path": "/clear-logs", "access": "admin" }
+  ],
+  "frontend": "admin.html"
+}

@@ -1,0 +1,32 @@
+{
+  "manifest": {
+    "id": "wishingskin.render-card",
+    "name": "角色渲染与玩家名片",
+    "description": "提供角色头像、全身立绘与玩家 SVG 名片公开端点，支持论坛与 README 嵌入及缓存控制。",
+    "version": "0.1.0",
+    "settingsNamespace": "wishingskin.render-card",
+    "migrationVersion": 0,
+    "permissions": ["routes.public", "routes.user", "user.frontend", "host.public.read"],
+    "settings": [
+      { "key": "cache_max_age", "label": "公开图片缓存秒数（0–86400，默认 300）", "type": "number" },
+      { "key": "default_theme", "label": "默认名片配色风格（light 浅色 / dark 深色 / emerald 翠绿）", "type": "text" },
+      { "key": "show_verified_badge", "label": "在玩家名片中展示正版 Minecraft 验证徽标", "type": "boolean" }
+    ]
+  },
+  "protocol": 2,
+  "routes": [
+    { "method": "GET", "path": "/avatar", "access": "public" },
+    { "method": "GET", "path": "/body", "access": "public" },
+    { "method": "GET", "path": "/card", "access": "public" },
+    { "method": "GET", "path": "/info", "access": "user" }
+  ],
+  "userFrontends": [
+    {
+      "id": "studio",
+      "label": "玩家名片与渲染图",
+      "description": "生成角色头像、全身渲染图和可嵌入论坛与 README 的名片链接。",
+      "slot": "user.tools",
+      "path": "studio.html"
+    }
+  ]
+}

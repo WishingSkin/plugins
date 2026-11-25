@@ -27,15 +27,15 @@ https://wishingskin.github.io/plugins/catalog.json
 
 ## 插件规划
 
-| 目录 | 插件标识 | 定位 | 阶段 |
+| 目录 | 插件标识 | 定位 | 状态 |
 | --- | --- | --- | --- |
-| `plugins/moderation` | `wishingskin.moderation` | 合规校验与内容审核（敏感词、规则过滤与外部审核接口） | Phase 1 |
-| `plugins/skin-overlays` | `wishingskin.skin-overlays` | 皮肤装饰层（圣诞装、万圣节饰品等透明叠层一键合成） | Phase 3 |
-| `plugins/skin-editor` | `wishingskin.skin-editor` | 在线皮肤编辑器（UV 分区标注与 2D/3D 像素绘制） | Phase 3 |
-| `plugins/skin-tools` | `wishingskin.skin-tools` | 手臂模型转换、64×32 升级与调色工具 | Phase 3 |
-| `plugins/render-card` | `wishingskin.render-card` | 头像、全身渲染图与玩家名片端点 | Phase 3 |
-| `plugins/server-sync` | `wishingskin.server-sync` | 外部社群与服务器生态联动 | Phase 3 |
-| `plugins/ai-skin` | `wishingskin.ai-skin` | AI 皮肤生成编排（对接外部推理与网格后处理） | Phase 3 |
+| `plugins/moderation` | `wishingskin.moderation` | 合规校验与内容审核（敏感词、规则过滤与外部审核接口） | `v0.1.0` 已实现 |
+| `plugins/skin-overlays` | `wishingskin.skin-overlays` | 皮肤装饰层（圣诞装、万圣节饰品等透明叠层一键合成） | `v0.1.0` 已实现 |
+| `plugins/skin-editor` | `wishingskin.skin-editor` | 在线皮肤编辑器（UV 分区标注与 2D 像素绘制及实时预览） | `v0.1.0` 已实现 |
+| `plugins/skin-tools` | `wishingskin.skin-tools` | 手臂模型转换、64×32 升级与调色工具 | `v0.1.0` 已实现 |
+| `plugins/render-card` | `wishingskin.render-card` | 头像、全身渲染图与玩家 SVG 名片端点 | `v0.1.0` 已实现 |
+| `plugins/server-sync` | `wishingskin.server-sync` | 外部社群与服务器生态联动 | `v0.1.0` 已实现 |
+| `plugins/ai-skin` | `wishingskin.ai-skin` | AI 皮肤生成编排（部署与架构方案待讨论） | 规划中 |
 
 ## 本地打包与检查
 

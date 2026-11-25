@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>社群与游戏服务器联动</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fafafa;
+    --panel: #ffffff;
+    --subtle: #f4f4f6;
+    --ink: #18181b;
+    --muted: #52525b;
+    --border: #e4e4e7;
+    --accent: #2563eb;
+    --ok: #15803d;
+    --ok-soft: rgba(21, 128, 61, 0.12);
+    --danger: #b91c1c;
+    --danger-soft: rgba(185, 28, 28, 0.12);
+    --radius: 10px;
+  }
+  :root[data-theme="dark"] {
+    --bg: #111113;
+    --panel: #18181b;
+    --subtle: #202024;
+    --ink: #f4f4f5;
+    --muted: #a1a1aa;
+    --border: #2e2e34;
+    --accent: #60a5fa;
+    --ok: #4ade80;
+    --ok-soft: rgba(74, 222, 128, 0.14);
+    --danger: #f87171;
+    --danger-soft: rgba(248, 113, 113, 0.15);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; font: 14px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  .stack { display: grid; gap: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 10px; }
+  .metric-label { font-size: 12px; color: var(--muted); }
+  .metric-value { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+  h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  button { font: inherit; min-height: 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--ink); padding: 6px 12px; cursor: pointer; font-weight: 500; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: 0.55; cursor: not-allowed; }
+  .badge { display: inline-flex; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); }
+  .badge.err { background: var(--danger-soft); color: var(--danger); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  pre { margin: 0; padding: 12px; border-radius: 8px; background: var(--subtle); border: 1px solid var(--border); font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-x: auto; }
+  .status { font-size: 12px; color: var(--muted); margin: 0; }
+</style>
+</head>
+<body>
+<div class="stack">
+  <section class="grid" aria-label="同步运行状态">
+    <div class="card"><span class="metric-label">推送成功</span><div id="s-sent" class="metric-value">0</div></div>
+    <div class="card"><span class="metric-label">推送失败</span><div id="s-failed" class="metric-value">0</div></div>
+    <div class="card"><span class="metric-label">推送目标</span><div id="s-target" class="metric-value">-</div></div>
+    <div class="card"><span class="metric-label">服务端查询接口</span><div id="s-query" class="metric-value">未启用</div></div>
+  </section>
+
+  <section class="card">
+    <div class="head">
+      <h2>联动推送控制</h2>
+      <div class="actions">
+        <button id="test-btn" class="primary" type="button">发送测试推送</button>
+        <button id="refresh-btn" type="button">刷新</button>
+        <button id="clear-btn" type="button">清空记录</button>
+      </div>
+    </div>
+    <p id="test-msg" class="status"></p>
+    <p id="logs-empty" class="status">暂无事件推送记录。</p>
+    <div style="overflow-x:auto">
+      <table id="logs-table" hidden>
+        <thead>
+          <tr><th>时间</th><th>事件</th><th>目标</th><th>结果</th><th>状态</th></tr>
+        </thead>
+        <tbody id="logs-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>服务端与 Webhook 对接说明</h2>
+    <pre>POST /api/plugins/wishingskin.server-sync/query
+Content-Type: application/json
+
+{
+  "apiKey": "&lt;配置的 server_api_key&gt;",
+  "name": "Steve"
+}</pre>
+    <p class="status">generic 模式下，请求头 <code>X-WishingSkin-Signature</code> 携带 <code>sha256=&lt;hex&gt;</code>，由请求体原始 JSON 与 <code>webhook_secret</code> 计算 HMAC-SHA256。</p>
+  </section>
+</div>
+
+<script>
+(() => {
+  const pending = new Map();
+  let seq = 0;
+
+  window.addEventListener('message', (event) => {
+    const msg = event.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'wishingskin:context' && msg.context) {
+      document.documentElement.dataset.theme = msg.context.theme === 'dark' ? 'dark' : 'light';
+      return;
+    }
+    if (msg.type === 'wishingskin:response' && pending.has(msg.id)) {
+      const h = pending.get(msg.id); pending.delete(msg.id); clearTimeout(h.t);
+      h.resolve({ status: msg.status, body: msg.body });
+    }
+  });
+
+  function callPlugin(method, path, body) {
+    const id = 'ss-' + (++seq);
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { pending.delete(id); reject(new Error('请求超时')); }, 10000);
+      pending.set(id, { resolve, reject, t });
+      window.parent.postMessage({ type: 'wishingskin:request', id, method, path, body }, '*');
+    });
+  }
+
+  function render(data) {
+    const stats = data.stats || {};
+    document.getElementById('s-sent').textContent = String(stats.sent || 0);
+    document.getElementById('s-failed').textContent = String(stats.failed || 0);
+    document.getElementById('s-target').textContent = data.webhookConfigured ? (data.targetType || 'generic') : '未配置';
+    document.getElementById('s-query').textContent = data.queryConfigured ? '已启用' : '未配置密钥';
+
+    const logs = Array.isArray(data.logs) ? data.logs : [];
+    const emptyEl = document.getElementById('logs-empty');
+    const tableEl = document.getElementById('logs-table');
+    const tbody = document.getElementById('logs-body');
+    tbody.innerHTML = '';
+    emptyEl.hidden = logs.length > 0;
+    tableEl.hidden = logs.length === 0;
+
+    for (const item of logs) {
+      const tr = document.createElement('tr');
+      const tdT = document.createElement('td');
+      tdT.textContent = item.ts ? new Date(item.ts * 1000).toLocaleString() : '-';
+      const tdE = document.createElement('td');
+      const code = document.createElement('code'); code.textContent = item.event || ''; tdE.appendChild(code);
+      const tdTarget = document.createElement('td'); tdTarget.textContent = item.target || '-';
+      const tdRes = document.createElement('td');
+      const b = document.createElement('span'); b.className = 'badge ' + (item.ok ? 'ok' : 'err'); b.textContent = item.ok ? '成功' : '失败'; tdRes.appendChild(b);
+      const tdMsg = document.createElement('td'); tdMsg.textContent = (item.status ? '[' + item.status + '] ' : '') + (item.message || '');
+      tr.append(tdT, tdE, tdTarget, tdRes, tdMsg);
+      tbody.appendChild(tr);
+    }
+  }
+
+  async function refresh() {
+    const res = await callPlugin('GET', '/status');
+    if (res.status === 200) render(res.body);
+  }
+
+  document.getElementById('test-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('test-btn');
+    const msg = document.getElementById('test-msg');
+    btn.disabled = true;
+    try {
+      const res = await callPlugin('POST', '/test-notify', {});
+      msg.textContent = (res.body && (res.body.message || res.body.error)) || '';
+      await refresh();
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  document.getElementById('refresh-btn').addEventListener('click', () => void refresh());
+  document.getElementById('clear-btn').addEventListener('click', async () => {
+    const res = await callPlugin('POST', '/clear-logs', {});
+    if (res.status === 200) await refresh();
+  });
+
+  void refresh();
+})();
+</script>
+</body>
+</html>

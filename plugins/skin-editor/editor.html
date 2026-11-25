@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>在线皮肤编辑器</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fafafa;
+    --panel: #ffffff;
+    --subtle: #f4f4f6;
+    --ink: #18181b;
+    --muted: #52525b;
+    --border: #e4e4e7;
+    --accent: #2563eb;
+    --accent-soft: rgba(37, 99, 235, 0.14);
+    --radius: 10px;
+  }
+  :root[data-theme="dark"] {
+    --bg: #111113;
+    --panel: #18181b;
+    --subtle: #202024;
+    --ink: #f4f4f5;
+    --muted: #a1a1aa;
+    --border: #2e2e34;
+    --accent: #60a5fa;
+    --accent-soft: rgba(96, 165, 250, 0.16);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 14px; font: 13px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
+  @media (max-width: 900px) { .workspace { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: grid; gap: 12px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  button, select, input[type="text"], input[type="file"], a.btn {
+    font: inherit; min-height: 34px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--ink); padding: 4px 10px; text-decoration: none;
+  }
+  button, a.btn { cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+  button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .palette { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .swatch { width: 22px; height: 22px; min-height: 22px; padding: 0; border-radius: 5px; border: 1px solid var(--border); }
+  .stage-wrap {
+    position: relative; width: 512px; max-width: 100%; aspect-ratio: 1; margin: 0 auto;
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    background-image:
+      linear-gradient(45deg, rgba(128,128,128,.12) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(128,128,128,.12) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgba(128,128,128,.12) 75%),
+      linear-gradient(-45deg, transparent 75%, rgba(128,128,128,.12) 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  }
+  .stage-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; touch-action: none; }
+  #guide-canvas { pointer-events: none; }
+  .status-bar { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .preview-row { display: flex; justify-content: center; gap: 16px; padding: 12px; background: var(--subtle); border: 1px solid var(--border); border-radius: 8px; }
+  .preview-row canvas { width: 80px; height: 160px; image-rendering: pixelated; }
+  .field { display: grid; gap: 4px; }
+  .field label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .checks { display: grid; gap: 6px; }
+  .check { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+  h2 { margin: 0; font-size: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="workspace">
+  <div class="card">
+    <div class="toolbar">
+      <button type="button" data-tool="pencil" class="active">画笔</button>
+      <button type="button" data-tool="eraser">橡皮擦</button>
+      <button type="button" data-tool="picker">吸管</button>
+      <button type="button" data-tool="bucket">油漆桶</button>
+      <button id="undo-btn" type="button" disabled>撤销</button>
+      <button id="redo-btn" type="button" disabled>重做</button>
+      <select id="layer-filter" aria-label="绘制区域限制">
+        <option value="all">全部 UV 区域</option>
+        <option value="base">仅基础层</option>
+        <option value="outer">仅外层饰品</option>
+      </select>
+    </div>
+
+    <div class="palette">
+      <input id="color-input" type="color" value="#2563eb" title="当前画笔颜色" />
+      <div id="swatches" class="palette"></div>
+      <label class="check"><input id="opt-mirror" type="checkbox" /> 水平对称绘制</label>
+      <label class="check"><input id="opt-grid" type="checkbox" checked /> 像素网格</label>
+      <label class="check"><input id="opt-uv" type="checkbox" checked /> UV 分区标注</label>
+    </div>
+
+    <div class="stage-wrap">
+      <canvas id="skin-canvas" width="64" height="64"></canvas>
+      <canvas id="guide-canvas" width="512" height="512"></canvas>
+    </div>
+    <div class="status-bar">
+      <span id="hover-info">悬停画布查看 UV 坐标与部件名称</span>
+      <span id="dim-info">64×64 (Standard)</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>实时人物预览</h2>
+    <div class="preview-row">
+      <canvas id="preview-front" width="16" height="32"></canvas>
+      <canvas id="preview-back" width="16" height="32"></canvas>
+    </div>
+
+    <div class="checks">
+      <label class="check"><input id="prev-outer" type="checkbox" checked /> 显示第二外层饰品</label>
+    </div>
+
+    <div class="field">
+      <label for="model-select">手臂模型</label>
+      <select id="model-select">
+        <option value="default">标准手臂 (Steve 4px)</option>
+        <option value="slim">纤细手臂 (Alex 3px)</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="source-select">载入皮肤或模板</label>
+      <select id="source-select"><option value="">选择模板或已有皮肤</option></select>
+    </div>
+
+    <div class="field">
+      <label for="local-file">导入本地 PNG</label>
+      <input id="local-file" type="file" accept="image/png" />
+    </div>
+
+    <div class="field">
+      <label for="save-name">输出材质名称</label>
+      <input id="save-name" type="text" maxlength="255" placeholder="我的原创皮肤" />
+    </div>
+
+    <div class="field">
+      <label for="equip-char">可选同时穿戴到角色</label>
+      <select id="equip-char"><option value="">仅保存到我的材质</option></select>
+    </div>
+
+    <div class="toolbar">
+      <a id="download-link" class="btn" download="custom-skin.png">下载 PNG</a>
+      <button id="save-btn" class="primary" type="button">保存到我的材质</button>
+      <button id="equip-btn" type="button" disabled>保存并穿戴</button>
+    </div>
+    <p id="save-note" class="status"></p>
+  </div>
+</div>
+
+<script>
+(() => {
+  const reqMap = new Map();
+  const hostMap = new Map();
+  let seq = 0;
+
+  const skinCanvas = document.getElementById('skin-canvas');
+  const sCtx = skinCanvas.getContext('2d', { willReadFrequently: true });
+  const guideCanvas = document.getElementById('guide-canvas');
+  const gCtx = guideCanvas.getContext('2d');
+  const fCanvas = document.getElementById('preview-front');
+  const fCtx = fCanvas.getContext('2d');
+  const bCanvas = document.getElementById('preview-back');
+  const bCtx = bCanvas.getContext('2d');
+
+  let tool = 'pencil';
+  let drawing = false;
+  let lastPt = null;
+  let hoverPt = null;
+  let undoStack = [];
+  let redoStack = [];
+  let templates = [];
+  let userSkins = [];
+  let pendingContextHash = '';
+
+  const paletteColors = [
+    '#18181b', '#ffffff', '#f3c6a5', '#d99b72',
+    '#dc2626', '#ea580c', '#eab308', '#16a34a',
+    '#0284c7', '#2563eb', '#7c3aed', '#db2777'
+  ];
+
+  const uvZones = [
+    { name: '头部基础', layer: 'base', x: 0, y: 0, w: 32, h: 16, color: '#2563eb' },
+    { name: '头饰外层 Hat', layer: 'outer', x: 32, y: 0, w: 32, h: 16, color: '#0ea5e9' },
+    { name: '右腿基础', layer: 'base', x: 0, y: 16, w: 16, h: 16, color: '#16a34a' },
+    { name: '躯干基础', layer: 'base', x: 16, y: 16, w: 24, h: 16, color: '#ea580c' },
+    { name: '右臂基础', layer: 'base', x: 40, y: 16, w: 16, h: 16, color: '#9333ea' },
+    { name: '右腿外层', layer: 'outer', x: 0, y: 32, w: 16, h: 16, color: '#22c55e' },
+    { name: '夹克外层', layer: 'outer', x: 16, y: 32, w: 24, h: 16, color: '#f97316' },
+    { name: '右袖外层', layer: 'outer', x: 40, y: 32, w: 16, h: 16, color: '#a855f7' },
+    { name: '左腿外层', layer: 'outer', x: 0, y: 48, w: 16, h: 16, color: '#14b8a6' },
+    { name: '左腿基础', layer: 'base', x: 16, y: 48, w: 16, h: 16, color: '#0d9488' },
+    { name: '左臂基础', layer: 'base', x: 32, y: 48, w: 16, h: 16, color: '#db2777' },
+    { name: '左袖外层', layer: 'outer', x: 48, y: 48, w: 16, h: 16, color: '#ec4899' }
+  ];
+
+  // Regions supporting symmetrical X drawing across face / torso front/back/top/bottom.
+  const mirrorBands = [
+    [8, 0, 8, 8], [16, 0, 8, 8], [8, 8, 8, 8], [24, 8, 8, 8],
+    [40, 0, 8, 8], [48, 0, 8, 8], [40, 8, 8, 8], [56, 8, 8, 8],
+    [20, 16, 8, 4], [28, 16, 8, 4], [20, 20, 8, 12], [32, 20, 8, 12],
+    [20, 32, 8, 4], [28, 32, 8, 4], [20, 36, 8, 12], [32, 36, 8, 12]
+  ];
+
+  window.addEventListener('message', (event) => {
+    const msg = event.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'wishingskin:context' && msg.context) {
+      document.documentElement.dataset.theme = msg.context.theme === 'dark' ? 'dark' : 'light';
+      if (msg.context.texture && msg.context.texture.fileHash) {
+        pendingContextHash = msg.context.texture.fileHash;
+        document.getElementById('model-select').value = msg.context.texture.model === 'slim' ? 'slim' : 'default';
+        if (!document.getElementById('save-name').value) {
+          document.getElementById('save-name').value = (msg.context.texture.name || '皮肤') + ' 编辑版';
+        }
+        void loadHashIntoCanvas(pendingContextHash);
+      }
+      renderGuides();
+      return;
+    }
+    if (msg.type === 'wishingskin:response' && reqMap.has(msg.id)) {
+      const h = reqMap.get(msg.id); reqMap.delete(msg.id); clearTimeout(h.t);
+      h.resolve({ status: msg.status, body: msg.body });
+    }
+    if (msg.type === 'wishingskin:host-response' && hostMap.has(msg.id)) {
+      const h = hostMap.get(msg.id); hostMap.delete(msg.id); clearTimeout(h.t);
+      h.resolve(msg);
+    }
+  });
+
+  function callPlugin(method, path, body) {
+    const id = 'ed-' + (++seq);
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, 15000);
+      reqMap.set(id, { resolve, reject, t });
+      window.parent.postMessage({ type: 'wishingskin:request', id, method, path, body }, '*');
+    });
+  }
+
+  function callHost(action, payload) {
+    const id = 'edh-' + (++seq);
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { hostMap.delete(id); reject(new Error('宿主响应超时')); }, 15000);
+      hostMap.set(id, { resolve, reject, t });
+      window.parent.postMessage({ type: 'wishingskin:host', id, action, payload }, '*');
+    });
+  }
+
+  function pushSnapshot() {
+    const snap = sCtx.getImageData(0, 0, 64, 64);
+    undoStack.push(snap);
+    if (undoStack.length > 30) undoStack.shift();
+    redoStack = [];
+    syncHistoryButtons();
+  }
+
+  function syncHistoryButtons() {
+    document.getElementById('undo-btn').disabled = undoStack.length <= 1;
+    document.getElementById('redo-btn').disabled = redoStack.length === 0;
+  }
+
+  function undo() {
+    if (undoStack.length <= 1) return;
+    const cur = undoStack.pop();
+    redoStack.push(cur);
+    sCtx.putImageData(undoStack[undoStack.length - 1], 0, 0);
+    syncHistoryButtons();
+    renderPreviews();
+  }
+
+  function redo() {
+    if (!redoStack.length) return;
+    const next = redoStack.pop();
+    undoStack.push(next);
+    sCtx.putImageData(next, 0, 0);
+    syncHistoryButtons();
+    renderPreviews();
+  }
+
+  function zoneAt(x, y) {
+    return uvZones.find(z => x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h);
+  }
+
+  function canPaintAt(x, y) {
+    const f = document.getElementById('layer-filter').value;
+    if (f === 'all') return true;
+    const z = zoneAt(x, y);
+    return !z || z.layer === f;
+  }
+
+  function hexToRgba(hex) {
+    const v = parseInt(hex.slice(1), 16);
+    return [(v >> 16) & 255, (v >> 8) & 255, v & 255, 255];
+  }
+
+  function rgbaToHex(r, g, b) {
+    return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+  }
+
+  function mirrorCoord(x, y) {
+    for (const [bx, by, bw, bh] of mirrorBands) {
+      if (x >= bx && x < bx + bw && y >= by && y < by + bh) {
+        return [bx + (bw - 1 - (x - bx)), y];
+      }
+    }
+    return null;
+  }
+
+  function setPixel(imgData, x, y, rgba) {
+    if (x < 0 || y < 0 || x >= 64 || y >= 64 || !canPaintAt(x, y)) return;
+    const i = (y * 64 + x) * 4;
+    imgData.data[i] = rgba[0];
+    imgData.data[i + 1] = rgba[1];
+    imgData.data[i + 2] = rgba[2];
+    imgData.data[i + 3] = rgba[3];
+  }
+
+  function floodFill(startX, startY, fillRgba) {
+    if (!canPaintAt(startX, startY)) return;
+    const img = sCtx.getImageData(0, 0, 64, 64);
+    const si = (startY * 64 + startX) * 4;
+    const target = [img.data[si], img.data[si + 1], img.data[si + 2], img.data[si + 3]];
+    if (target[0] === fillRgba[0] && target[1] === fillRgba[1] && target[2] === fillRgba[2] && target[3] === fillRgba[3]) return;
+
+    const stack = [[startX, startY]];
+    const seen = new Uint8Array(64 * 64);
+    while (stack.length) {
+      const [x, y] = stack.pop();
+      if (x < 0 || y < 0 || x >= 64 || y >= 64) continue;
+      const idx = y * 64 + x;
+      if (seen[idx] || !canPaintAt(x, y)) continue;
+      const off = idx * 4;
+      if (img.data[off] !== target[0] || img.data[off + 1] !== target[1] || img.data[off + 2] !== target[2] || img.data[off + 3] !== target[3]) continue;
+      seen[idx] = 1;
+      img.data[off] = fillRgba[0];
+      img.data[off + 1] = fillRgba[1];
+      img.data[off + 2] = fillRgba[2];
+      img.data[off + 3] = fillRgba[3];
+      stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+    sCtx.putImageData(img, 0, 0);
+  }
+
+  function applyToolAt(x, y) {
+    if (tool === 'picker') {
+      const d = sCtx.getImageData(x, y, 1, 1).data;
+      if (d[3] > 0) document.getElementById('color-input').value = rgbaToHex(d[0], d[1], d[2]);
+      return;
+    }
+    if (tool === 'bucket') {
+      floodFill(x, y, hexToRgba(document.getElementById('color-input').value));
+      pushSnapshot();
+      renderPreviews();
+      return;
+    }
+    const rgba = tool === 'eraser' ? [0, 0, 0, 0] : hexToRgba(document.getElementById('color-input').value);
+    const img = sCtx.getImageData(0, 0, 64, 64);
+    const pts = lastPt ? bresenham(lastPt[0], lastPt[1], x, y) : [[x, y]];
+    const mirror = document.getElementById('opt-mirror').checked;
+    for (const [px, py] of pts) {
+      setPixel(img, px, py, rgba);
+      if (mirror) {
+        const mp = mirrorCoord(px, py);
+        if (mp) setPixel(img, mp[0], mp[1], rgba);
+      }
+    }
+    sCtx.putImageData(img, 0, 0);
+    lastPt = [x, y];
+    renderPreviews();
+  }
+
+  function bresenham(x0, y0, x1, y1) {
+    const out = [];
+    let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+    let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy;
+    while (true) {
+      out.push([x0, y0]);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x0 += sx; }
+      if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+    return out;
+  }
+
+  function canvasCoords(e) {
+    const r = skinCanvas.getBoundingClientRect();
+    const x = Math.min(63, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * 64)));
+    const y = Math.min(63, Math.max(0, Math.floor(((e.clientY - r.top) / r.height) * 64)));
+    return [x, y];
+  }
+
+  function renderGuides() {
+    gCtx.clearRect(0, 0, 512, 512);
+    const showGrid = document.getElementById('opt-grid').checked;
+    const showUV = document.getElementById('opt-uv').checked;
+
+    if (showGrid) {
+      gCtx.strokeStyle = 'rgba(128,128,128,0.22)';
+      gCtx.lineWidth = 1;
+      for (let i = 1; i < 64; i++) {
+        const p = i * 8 + 0.5;
+        gCtx.beginPath(); gCtx.moveTo(p, 0); gCtx.lineTo(p, 512); gCtx.stroke();
+        gCtx.beginPath(); gCtx.moveTo(0, p); gCtx.lineTo(512, p); gCtx.stroke();
+      }
+    }
+    if (showUV) {
+      gCtx.font = '600 10px sans-serif';
+      for (const z of uvZones) {
+        gCtx.strokeStyle = z.color;
+        gCtx.lineWidth = 1.5;
+        gCtx.strokeRect(z.x * 8 + 1, z.y * 8 + 1, z.w * 8 - 2, z.h * 8 - 2);
+        gCtx.fillStyle = z.color;
+        gCtx.fillText(z.name, z.x * 8 + 4, z.y * 8 + 12);
+      }
+    }
+    if (hoverPt) {
+      gCtx.strokeStyle = '#facc15';
+      gCtx.lineWidth = 2;
+      gCtx.strokeRect(hoverPt[0] * 8 + 1, hoverPt[1] * 8 + 1, 6, 6);
+    }
+  }
+
+  function renderPreviews() {
+    const slim = document.getElementById('model-select').value === 'slim';
+    const outer = document.getElementById('prev-outer').checked;
+    const armW = slim ? 3 : 4;
+
+    fCtx.clearRect(0, 0, 16, 32);
+    fCtx.drawImage(skinCanvas, 8, 8, 8, 8, 4, 0, 8, 8);
+    fCtx.drawImage(skinCanvas, 20, 20, 8, 12, 4, 8, 8, 12);
+    fCtx.drawImage(skinCanvas, 44, 20, armW, 12, 4 - armW, 8, armW, 12);
+    fCtx.drawImage(skinCanvas, 36, 52, armW, 12, 12, 8, armW, 12);
+    fCtx.drawImage(skinCanvas, 4, 20, 4, 12, 4, 20, 4, 12);
+    fCtx.drawImage(skinCanvas, 20, 52, 4, 12, 8, 20, 4, 12);
+    if (outer) {
+      fCtx.drawImage(skinCanvas, 40, 8, 8, 8, 4, 0, 8, 8);
+      fCtx.drawImage(skinCanvas, 20, 36, 8, 12, 4, 8, 8, 12);
+      fCtx.drawImage(skinCanvas, 44, 36, armW, 12, 4 - armW, 8, armW, 12);
+      fCtx.drawImage(skinCanvas, 52, 52, armW, 12, 12, 8, armW, 12);
+      fCtx.drawImage(skinCanvas, 4, 36, 4, 12, 4, 20, 4, 12);
+      fCtx.drawImage(skinCanvas, 4, 52, 4, 12, 8, 20, 4, 12);
+    }
+
+    const rBackX = slim ? 51 : 52;
+    const lBackX = slim ? 43 : 44;
+    const lSleeveBackX = slim ? 59 : 60;
+    bCtx.clearRect(0, 0, 16, 32);
+    bCtx.drawImage(skinCanvas, 24, 8, 8, 8, 4, 0, 8, 8);
+    bCtx.drawImage(skinCanvas, 32, 20, 8, 12, 4, 8, 8, 12);
+    bCtx.drawImage(skinCanvas, lBackX, 52, armW, 12, 4 - armW, 8, armW, 12);
+    bCtx.drawImage(skinCanvas, rBackX, 20, armW, 12, 12, 8, armW, 12);
+    bCtx.drawImage(skinCanvas, 28, 52, 4, 12, 4, 20, 4, 12);
+    bCtx.drawImage(skinCanvas, 12, 20, 4, 12, 8, 20, 4, 12);
+    if (outer) {
+      bCtx.drawImage(skinCanvas, 56, 8, 8, 8, 4, 0, 8, 8);
+      bCtx.drawImage(skinCanvas, 32, 36, 8, 12, 4, 8, 8, 12);
+      bCtx.drawImage(skinCanvas, lSleeveBackX, 52, armW, 12, 4 - armW, 8, armW, 12);
+      bCtx.drawImage(skinCanvas, rBackX, 36, armW, 12, 12, 8, armW, 12);
+      bCtx.drawImage(skinCanvas, 12, 52, 4, 12, 4, 20, 4, 12);
+      bCtx.drawImage(skinCanvas, 12, 36, 4, 12, 8, 20, 4, 12);
+    }
+
+    const dataUrl = skinCanvas.toDataURL('image/png');
+    const dl = document.getElementById('download-link');
+    dl.href = dataUrl;
+    dl.download = (document.getElementById('save-name').value.trim() || 'custom-skin') + '.png';
+  }
+
+  function loadImageDataUrl(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        sCtx.clearRect(0, 0, 64, 64);
+        sCtx.imageSmoothingEnabled = false;
+        sCtx.drawImage(img, 0, 0, 64, Math.min(64, img.height === img.width / 2 ? 32 : 64));
+        undoStack = []; redoStack = [];
+        pushSnapshot();
+        renderPreviews();
+        resolve();
+      };
+      img.onerror = () => reject(new Error('图像解码失败'));
+      img.src = dataUrl;
+    });
+  }
+
+  async function loadHashIntoCanvas(hash) {
+    const res = await callHost('getTextureDataUrl', { hash });
+    if (res.ok && res.data && res.data.dataUrl) {
+      await loadImageDataUrl(res.data.dataUrl);
+    }
+  }
+
+  async function saveResult(andEquip) {
+    const note = document.getElementById('save-note');
+    const charID = Number(document.getElementById('equip-char').value) || 0;
+    const model = document.getElementById('model-select').value;
+    const name = document.getElementById('save-name').value.trim() || '原创皮肤';
+    const dataUrl = skinCanvas.toDataURL('image/png');
+    note.textContent = '正在保存到我的材质…';
+
+    const saved = await callHost('saveTexture', {
+      kind: 'skin', model, name, pngBase64: dataUrl.split(',')[1]
+    });
+    if (!saved.ok) {
+      note.textContent = saved.error || '保存失败';
+      void callHost('notify', { message: note.textContent, kind: 'error' });
+      return;
+    }
+    const rec = saved.data;
+    if (andEquip && charID > 0 && rec && rec.id) {
+      if (rec.reviewState && rec.reviewState !== 'approved') {
+        const m = '皮肤已上传，等待审核通过后方可穿戴。';
+        note.textContent = m;
+        void callHost('notify', { message: m, kind: 'success' });
+        return;
+      }
+      const bound = await callHost('applyTexture', {
+        characterId: charID, kind: 'skin', recordId: rec.id, model
+      });
+      if (!bound.ok) {
+        note.textContent = bound.error || '保存成功但穿戴失败';
+        void callHost('notify', { message: note.textContent, kind: 'error' });
+        return;
+      }
+      note.textContent = '皮肤已保存并穿戴到选定角色。';
+      void callHost('notify', { message: '皮肤已保存并穿戴。', kind: 'success' });
+      return;
+    }
+    note.textContent = '已保存到我的材质。';
+    void callHost('notify', { message: '皮肤已保存到我的材质。', kind: 'success' });
+  }
+
+  async function init() {
+    const sw = document.getElementById('swatches');
+    for (const hex of paletteColors) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'swatch';
+      b.style.background = hex;
+      b.title = hex;
+      b.addEventListener('click', () => { document.getElementById('color-input').value = hex; });
+      sw.appendChild(b);
+    }
+
+    const [tplRes, texRes, charRes] = await Promise.all([
+      callPlugin('GET', '/templates'),
+      callHost('listTextures', { kind: 'skin', pageSize: 100 }),
+      callHost('listCharacters', {})
+    ]);
+
+    const sel = document.getElementById('source-select');
+    templates = (tplRes.status === 200 && tplRes.body.templates) ? tplRes.body.templates : [];
+    for (const tpl of templates) {
+      const opt = document.createElement('option');
+      opt.value = 'tpl:' + tpl.id;
+      opt.textContent = '[模板] ' + tpl.name;
+      sel.appendChild(opt);
+    }
+
+    userSkins = (texRes.ok && texRes.data && texRes.data.textures) ? texRes.data.textures.filter(x => !x.reviewState || x.reviewState === 'approved') : [];
+    for (const s of userSkins) {
+      const opt = document.createElement('option');
+      opt.value = 'hash:' + s.fileHash + ':' + (s.model || 'default');
+      opt.textContent = '[皮肤] ' + s.name;
+      sel.appendChild(opt);
+    }
+
+    const cSel = document.getElementById('equip-char');
+    const chars = (charRes.ok && charRes.data && charRes.data.characters) ? charRes.data.characters : [];
+    for (const c of chars) {
+      const opt = document.createElement('option');
+      opt.value = String(c.id);
+      opt.textContent = c.name;
+      cSel.appendChild(opt);
+    }
+
+    if (!pendingContextHash && templates.length) {
+      await loadImageDataUrl('data:image/png;base64,' + templates[0].pngBase64);
+    } else if (!pendingContextHash) {
+      pushSnapshot();
+      renderPreviews();
+    }
+    renderGuides();
+  }
+
+  for (const btn of document.querySelectorAll('[data-tool]')) {
+    btn.addEventListener('click', () => {
+      tool = btn.dataset.tool;
+      for (const b of document.querySelectorAll('[data-tool]')) b.classList.toggle('active', b === btn);
+    });
+  }
+
+  skinCanvas.addEventListener('pointerdown', (e) => {
+    skinCanvas.setPointerCapture(e.pointerId);
+    drawing = true;
+    lastPt = null;
+    const [x, y] = canvasCoords(e);
+    applyToolAt(x, y);
+  });
+  skinCanvas.addEventListener('pointermove', (e) => {
+    const [x, y] = canvasCoords(e);
+    hoverPt = [x, y];
+    const z = zoneAt(x, y);
+    document.getElementById('hover-info').textContent = 'X:' + x + ' Y:' + y + (z ? '  ' + z.name : '');
+    renderGuides();
+    if (drawing && (tool === 'pencil' || tool === 'eraser')) applyToolAt(x, y);
+  });
+  skinCanvas.addEventListener('pointerup', () => {
+    if (drawing && (tool === 'pencil' || tool === 'eraser')) pushSnapshot();
+    drawing = false;
+    lastPt = null;
+  });
+  skinCanvas.addEventListener('pointerleave', () => { hoverPt = null; renderGuides(); });
+
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) { e.preventDefault(); redo(); }
+  });
+
+  document.getElementById('undo-btn').addEventListener('click', undo);
+  document.getElementById('redo-btn').addEventListener('click', redo);
+  document.getElementById('opt-grid').addEventListener('change', renderGuides);
+  document.getElementById('opt-uv').addEventListener('change', renderGuides);
+  document.getElementById('prev-outer').addEventListener('change', renderPreviews);
+  document.getElementById('model-select').addEventListener('change', renderPreviews);
+  document.getElementById('save-name').addEventListener('input', renderPreviews);
+  document.getElementById('equip-char').addEventListener('change', (e) => {
+    document.getElementById('equip-btn').disabled = !e.target.value;
+  });
+  document.getElementById('source-select').addEventListener('change', (e) => {
+    const val = e.target.value;
+    if (val.startsWith('tpl:')) {
+      const tpl = templates.find(t => t.id === val.slice(4));
+      if (tpl) {
+        document.getElementById('model-select').value = tpl.model || 'default';
+        void loadImageDataUrl('data:image/png;base64,' + tpl.pngBase64);
+      }
+    } else if (val.startsWith('hash:')) {
+      const [, hash, mdl] = val.split(':');
+      document.getElementById('model-select').value = mdl === 'slim' ? 'slim' : 'default';
+      void loadHashIntoCanvas(hash);
+    }
+  });
+  document.getElementById('local-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => void loadImageDataUrl(String(r.result || ''));
+    r.readAsDataURL(file);
+  });
+  document.getElementById('save-btn').addEventListener('click', () => void saveResult(false));
+  document.getElementById('equip-btn').addEventListener('click', () => void saveResult(true));
+
+  void init();
+})();
+</script>
+</body>
+</html>

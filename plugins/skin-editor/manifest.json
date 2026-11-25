@@ -1,0 +1,33 @@
+{
+  "manifest": {
+    "id": "wishingskin.skin-editor",
+    "name": "在线皮肤编辑器",
+    "description": "提供带 UV 分区标注网格、对称绘制与实时预览的 64×64 Minecraft 皮肤像素工作台。",
+    "version": "0.1.0",
+    "settingsNamespace": "wishingskin.skin-editor",
+    "migrationVersion": 0,
+    "permissions": ["routes.user", "user.frontend"],
+    "settings": []
+  },
+  "protocol": 2,
+  "routes": [
+    { "method": "GET", "path": "/templates", "access": "user" }
+  ],
+  "userFrontends": [
+    {
+      "id": "editor",
+      "label": "在线皮肤编辑器",
+      "description": "带 UV 分区网格的 64×64 像素绘制与实时预览工作台。",
+      "slot": "user.tools",
+      "path": "editor.html"
+    },
+    {
+      "id": "paint",
+      "label": "在编辑器中打开",
+      "description": "载入当前皮肤到像素编辑器进行修改。",
+      "slot": "texture.action",
+      "path": "editor.html",
+      "kinds": ["skin"]
+    }
+  ]
+}
