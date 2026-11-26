@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -8,6 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	"image/png"
 	"net/http"
 	"net/url"
 	"slices"
@@ -23,14 +27,15 @@ import (
 )
 
 const (
-	maxPromptRunes    = 500
-	maxJobsRetained   = 64
-	maxHistoryPerUser = 12
-	historyTTL        = 7 * 24 * time.Hour
-	histIdxPrefix     = "hist_idx:"
-	histItemPrefix    = "hist_item:"
-	maxAuditLogs      = 50
-	jobTTL            = 15 * time.Minute
+	maxPromptRunes        = 500
+	maxJobsRetained       = 64
+	maxHistoryPerUser     = 12
+	maxGlobalHistoryItems = 48
+	historyTTL            = 7 * 24 * time.Hour
+	histIdxPrefix         = "hist_idx:"
+	histItemPrefix        = "hist_item:"
+	maxAuditLogs          = 50
+	jobTTL                = 15 * time.Minute
 )
 
 const (
@@ -103,6 +108,7 @@ type aiJob struct {
 	DurationMs         int64       `json:"durationMs,omitempty"`
 	NeedsFlush         bool        `json:"-"`
 	Counted            bool        `json:"-"`
+	DryRun             bool        `json:"-"`
 }
 
 type aiHistoryItem struct {
@@ -212,7 +218,7 @@ func parseAIConfig(settings map[string]any) aiConfig {
 	cfg := aiConfig{
 		DailyLimit:      5,
 		CooldownSeconds: 15,
-		Timeout:         60 * time.Second,
+		Timeout:         90 * time.Second,
 	}
 	if settings == nil {
 		return cfg
@@ -250,12 +256,12 @@ func parseAIConfig(settings map[string]any) aiConfig {
 	if v, ok := settings["cooldown_seconds"].(float64); ok && v >= 0 {
 		cfg.CooldownSeconds = int(v)
 	}
-	if v, ok := settings["timeout_seconds"].(float64); ok {
+	if v, ok := settings["timeout_seconds"].(float64); ok && v > 0 {
 		sec := int(v)
-		if sec < 10 {
-			sec = 10
-		} else if sec > 180 {
-			sec = 180
+		if sec < 15 {
+			sec = 15
+		} else if sec > 240 {
+			sec = 240
 		}
 		cfg.Timeout = time.Duration(sec) * time.Second
 	}
@@ -348,11 +354,13 @@ func routePostGenerate(ctx context.Context, cfg aiConfig, req sdk.RuntimeRequest
 		return errResp(401, "请先登录后使用 AI 皮肤工坊")
 	}
 	var body struct {
-		Prompt     string      `json:"prompt"`
-		Engine     string      `json:"engine"`
-		Model      string      `json:"model"`
-		Style      string      `json:"style"`
-		BaseRecipe *SkinRecipe `json:"baseRecipe"`
+		Prompt               string      `json:"prompt"`
+		Engine               string      `json:"engine"`
+		Model                string      `json:"model"`
+		Style                string      `json:"style"`
+		BaseRecipe           *SkinRecipe `json:"baseRecipe"`
+		BaseJobID            string      `json:"baseJobId"`
+		ReferenceImageBase64 string      `json:"referenceImageBase64"`
 	}
 	if err := json.Unmarshal(req.Body, &body); err != nil {
 		return errResp(400, "请求参数无效")
@@ -381,8 +389,40 @@ func routePostGenerate(ctx context.Context, cfg aiConfig, req sdk.RuntimeRequest
 	if !configured {
 		return errResp(503, "所选 AI 引擎尚未在后台配置或启用，请联系管理员配置 API 或开启演示模式")
 	}
-	if body.BaseRecipe != nil && chosen != engineStructuredLLM && chosen != engineLocalDemo {
-		return errResp(400, "仅纯文本配方或本地演示引擎支持基于现有配方的迭代微调")
+
+	var refImg []byte
+	if strings.TrimSpace(body.ReferenceImageBase64) != "" {
+		decodedRef, err := decodeAndValidateRefImage(body.ReferenceImageBase64)
+		if err != nil {
+			return errResp(400, err.Error())
+		}
+		refImg = decodedRef
+	}
+
+	baseRecipe := body.BaseRecipe
+	var baseSkin *image.NRGBA
+	baseJobID := strings.TrimSpace(body.BaseJobID)
+	if baseJobID != "" {
+		baseJob, errMsg, status := manager.getCompletedSkin(baseJobID, req.Principal.ID, req.Principal.Admin)
+		if status != 0 {
+			return errResp(status, errMsg)
+		}
+		if rawPNG, err := base64.StdEncoding.DecodeString(baseJob.PNGBase64); err == nil {
+			if img, err := skinpng.DecodePNG(rawPNG); err == nil {
+				baseSkin = img
+				if len(refImg) == 0 && (chosen == engineStructuredLLM || chosen == engineLocalDemo) && baseRecipe == nil && baseJob.Recipe == nil {
+					if frontPNG, err := skinpng.EncodePNG(skinpng.RenderBodyFront(img, 8, baseJob.Model == "slim", true)); err == nil {
+						refImg = frontPNG
+					}
+				}
+			}
+		}
+		if baseRecipe == nil && baseJob.Recipe != nil {
+			rc := *baseJob.Recipe
+			baseRecipe = &rc
+		}
+	} else if baseRecipe != nil && chosen != engineStructuredLLM && chosen != engineLocalDemo {
+		return errResp(400, "仅纯文本配方、本地演示引擎或基于历史任务编号支持微调")
 	}
 
 	// Pre-check points availability via Host API before claiming quota/lock.
@@ -415,22 +455,29 @@ func routePostGenerate(ctx context.Context, cfg aiConfig, req sdk.RuntimeRequest
 		return errResp(status, errMsg)
 	}
 
+	jobID := job.ID
+	jobStatus := job.Status
+	jobEngine := job.Engine
+	jobStage := job.Stage
+
 	in := aiGenerateInput{
-		Prompt:     prompt,
-		Style:      strings.TrimSpace(body.Style),
-		Model:      skinModel,
-		BaseRecipe: body.BaseRecipe,
+		Prompt:         prompt,
+		Style:          strings.TrimSpace(body.Style),
+		Model:          skinModel,
+		BaseRecipe:     baseRecipe,
+		BaseSkin:       baseSkin,
+		ReferenceImage: refImg,
 	}
 
-	go runGenerationWorker(job.ID, cfg, in)
+	go runGenerationWorker(jobID, cfg, in)
 
 	return sdk.RuntimeResponse{
 		Status: 202,
 		Body: mustJSON(map[string]any{
-			"jobId":  job.ID,
-			"status": job.Status,
-			"engine": job.Engine,
-			"stage":  job.Stage,
+			"jobId":  jobID,
+			"status": jobStatus,
+			"engine": jobEngine,
+			"stage":  jobStage,
 		}),
 	}
 }
@@ -484,7 +531,7 @@ func runGenerationWorker(jobID string, cfg aiConfig, in aiGenerateInput) {
 
 	var pointsSpent int64
 	var balance string
-	if cfg.PointsCost > 0 {
+	if cfg.PointsCost > 0 && !manager.isDryRunJob(jobID) {
 		manager.updateStage(jobID, "running", "校验通过，正在结算积分…")
 		hc, hcErr := hostclient.FromEnv()
 		if hcErr != nil {
@@ -692,9 +739,11 @@ func routeAdminStatus(cfg aiConfig) sdk.RuntimeResponse {
 
 func routeAdminTest(ctx context.Context, cfg aiConfig, req sdk.RuntimeRequest) sdk.RuntimeResponse {
 	var body struct {
-		Engine string `json:"engine"`
-		Prompt string `json:"prompt"`
-		Model  string `json:"model"`
+		Engine               string `json:"engine"`
+		Prompt               string `json:"prompt"`
+		Model                string `json:"model"`
+		Async                bool   `json:"async"`
+		ReferenceImageBase64 string `json:"referenceImageBase64"`
 	}
 	if err := json.Unmarshal(req.Body, &body); err != nil {
 		return errResp(400, "请求参数无效")
@@ -723,11 +772,39 @@ func routeAdminTest(ctx context.Context, cfg aiConfig, req sdk.RuntimeRequest) s
 		return errResp(400, "指定引擎尚未配置或未启用")
 	}
 
+	var refImg []byte
+	if strings.TrimSpace(body.ReferenceImageBase64) != "" {
+		decodedRef, err := decodeAndValidateRefImage(body.ReferenceImageBase64)
+		if err != nil {
+			return errResp(400, err.Error())
+		}
+		refImg = decodedRef
+	}
+
+	in := aiGenerateInput{Prompt: prompt, Model: model, ReferenceImage: refImg}
+	if body.Async {
+		job := manager.reserveDryRunJob(req.Principal.ID, target, model, prompt, time.Now())
+		jobID := job.ID
+		jobStatus := job.Status
+		jobEngine := job.Engine
+		jobStage := job.Stage
+		go runGenerationWorker(jobID, cfg, in)
+		return sdk.RuntimeResponse{
+			Status: 202,
+			Body: mustJSON(map[string]any{
+				"jobId":  jobID,
+				"status": jobStatus,
+				"engine": jobEngine,
+				"stage":  jobStage,
+				"dryRun": true,
+			}),
+		}
+	}
+
 	started := time.Now()
 	testCtx, cancel := context.WithTimeout(ctx, cfg.Timeout)
 	defer cancel()
 
-	in := aiGenerateInput{Prompt: prompt, Model: model}
 	var out aiGenerateOutput
 	var err error
 	switch target {
@@ -973,6 +1050,36 @@ func (m *jobManager) reserveJob(uid int64, isAdmin bool, engine, model, prompt, 
 	return job, "", 0
 }
 
+func (m *jobManager) reserveDryRunJob(uid int64, engine, model, prompt string, now time.Time) *aiJob {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.pruneLocked(now)
+	jobID := randomJobID()
+	job := &aiJob{
+		ID:        jobID,
+		UserID:    uid,
+		Engine:    engine,
+		Model:     model,
+		Prompt:    prompt,
+		Status:    "queued",
+		Stage:     "管理员测试任务已入队…",
+		DateKey:   utcDateKey(now),
+		CreatedAt: now,
+		UpdatedAt: now,
+		DryRun:    true,
+	}
+	m.jobs[jobID] = job
+	return job
+}
+
+func (m *jobManager) isDryRunJob(jobID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	j := m.jobs[jobID]
+	return j != nil && j.DryRun
+}
+
 func (m *jobManager) updateStage(jobID, status, stage string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1019,15 +1126,18 @@ func (m *jobManager) failJob(jobID, errMsg string, dur time.Duration) {
 	j.UpdatedAt = now
 	j.NeedsFlush = true
 
-	if m.activeByUser[j.UserID] == jobID {
-		delete(m.activeByUser, j.UserID)
+	if !j.DryRun {
+		if m.activeByUser[j.UserID] == jobID {
+			delete(m.activeByUser, j.UserID)
+		}
+		// Release daily quota reservation since generation failed without producing a skin.
+		if j.Counted && m.dailyUsage[j.DateKey] != nil && m.dailyUsage[j.DateKey][j.UserID] > 0 {
+			m.dailyUsage[j.DateKey][j.UserID]--
+			j.Counted = false
+		}
+		m.stats.TotalFailed++
+		m.dirty = true
 	}
-	// Release daily quota reservation since generation failed without producing a skin.
-	if j.Counted && m.dailyUsage[j.DateKey] != nil && m.dailyUsage[j.DateKey][j.UserID] > 0 {
-		m.dailyUsage[j.DateKey][j.UserID]--
-		j.Counted = false
-	}
-	m.stats.TotalFailed++
 	m.appendLogLocked(aiAuditEntry{
 		Time:       now.UTC().Format(time.RFC3339),
 		UserID:     j.UserID,
@@ -1036,7 +1146,6 @@ func (m *jobManager) failJob(jobID, errMsg string, dur time.Duration) {
 		DurationMs: j.DurationMs,
 		Detail:     truncateRunes(errMsg, 80),
 	})
-	m.dirty = true
 }
 
 func (m *jobManager) succeedJob(jobID string, res aiJobSuccess, dur time.Duration) {
@@ -1061,11 +1170,14 @@ func (m *jobManager) succeedJob(jobID string, res aiJobSuccess, dur time.Duratio
 	j.UpdatedAt = now
 	j.NeedsFlush = true
 
-	if m.activeByUser[j.UserID] == jobID {
-		delete(m.activeByUser, j.UserID)
+	if !j.DryRun {
+		if m.activeByUser[j.UserID] == jobID {
+			delete(m.activeByUser, j.UserID)
+		}
+		m.recordHistoryLocked(j, now.UTC())
+		m.stats.TotalGenerated++
+		m.dirty = true
 	}
-	m.recordHistoryLocked(j, now.UTC())
-	m.stats.TotalGenerated++
 	m.appendLogLocked(aiAuditEntry{
 		Time:       now.UTC().Format(time.RFC3339),
 		UserID:     j.UserID,
@@ -1074,7 +1186,6 @@ func (m *jobManager) succeedJob(jobID string, res aiJobSuccess, dur time.Duratio
 		DurationMs: j.DurationMs,
 		Detail:     truncateRunes(res.Summary, 80),
 	})
-	m.dirty = true
 }
 
 func (m *jobManager) getJobForUser(jobID string, uid int64, isAdmin bool) (aiJob, map[string]json.RawMessage, int, string) {
@@ -1179,6 +1290,59 @@ func (m *jobManager) recordHistoryLocked(j *aiJob, now time.Time) {
 	}
 	m.historyIndex[j.UserID] = next
 	m.dirtyHistUsers[j.UserID] = true
+	m.pruneGlobalHistoryLocked(now)
+}
+
+func (m *jobManager) pruneGlobalHistoryLocked(now time.Time) {
+	if len(m.historyItems) <= maxGlobalHistoryItems {
+		return
+	}
+	type histEntry struct {
+		id string
+		at time.Time
+	}
+	var all []histEntry
+	for id, item := range m.historyItems {
+		if item == nil || !now.Before(item.ExpiresAt) {
+			if item != nil {
+				m.removeHistoryIDFromUserLocked(item.UserID, id)
+				delete(m.historyItems, id)
+			}
+			m.dirtyHistItems[id] = false
+			continue
+		}
+		all = append(all, histEntry{id: id, at: item.CreatedAt})
+	}
+	if len(all) <= maxGlobalHistoryItems {
+		return
+	}
+	slices.SortFunc(all, func(a, b histEntry) int {
+		return a.at.Compare(b.at)
+	})
+	evictCount := len(all) - maxGlobalHistoryItems
+	for i := 0; i < evictCount; i++ {
+		id := all[i].id
+		if item := m.historyItems[id]; item != nil {
+			m.removeHistoryIDFromUserLocked(item.UserID, id)
+			delete(m.historyItems, id)
+		}
+		m.dirtyHistItems[id] = false
+	}
+}
+
+func (m *jobManager) removeHistoryIDFromUserLocked(uid int64, jobID string) {
+	ids := m.historyIndex[uid]
+	if len(ids) == 0 {
+		return
+	}
+	var kept []string
+	for _, id := range ids {
+		if id != jobID {
+			kept = append(kept, id)
+		}
+	}
+	m.historyIndex[uid] = kept
+	m.dirtyHistUsers[uid] = true
 }
 
 func (m *jobManager) pruneHistoryForUserLocked(uid int64, now time.Time) {
@@ -1398,6 +1562,40 @@ func isLoopbackURL(raw string) bool {
 	}
 	h := strings.ToLower(u.Hostname())
 	return h == "localhost" || h == "127.0.0.1" || h == "::1"
+}
+
+func decodeAndValidateRefImage(raw string) ([]byte, error) {
+	s := strings.TrimSpace(raw)
+	if idx := strings.Index(s, "base64,"); strings.HasPrefix(s, "data:") && idx >= 0 {
+		s = s[idx+len("base64,"):]
+	}
+	s = strings.NewReplacer("\r", "", "\n", "", " ", "").Replace(s)
+	if len(s) == 0 {
+		return nil, errors.New("参考图片内容为空")
+	}
+	if len(s) > 3<<20 {
+		return nil, errors.New("参考图片过大，请上传 2 MiB 以内的 PNG 或 JPG 图片")
+	}
+	decoded, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return nil, errors.New("参考图片 Base64 编码无效")
+	}
+	if len(decoded) == 0 || len(decoded) > 2<<20 {
+		return nil, errors.New("参考图片过大，请上传 2 MiB 以内的 PNG 或 JPG 图片")
+	}
+	img, _, err := image.Decode(bytes.NewReader(decoded))
+	if err != nil {
+		return nil, errors.New("无法解析参考图片，请上传有效的 PNG 或 JPG 图片")
+	}
+	b := img.Bounds()
+	if b.Dx() < 1 || b.Dy() < 1 || b.Dx() > 4096 || b.Dy() > 4096 {
+		return nil, errors.New("参考图片尺寸超出限制（支持 1×1 至 4096×4096）")
+	}
+	var out bytes.Buffer
+	if err := png.Encode(&out, img); err != nil {
+		return nil, errors.New("参考图片重编码失败")
+	}
+	return out.Bytes(), nil
 }
 
 func errResp(status int, msg string) sdk.RuntimeResponse {

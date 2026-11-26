@@ -33,6 +33,7 @@
     --accent-hover: #3b82f6;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; padding: 4px; background: transparent; color: var(--ink); font: 14px/1.55 var(--font-sans); }
   .layout { display: grid; gap: 14px; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); display: grid; gap: 12px; }
@@ -136,7 +137,13 @@
   const reqMap = new Map();
   const hostMap = new Map();
   let seq = 0;
-  let baseOrigin = window.location.origin;
+  let publicUrlFromServer = '';
+  let siteOrigin = '';
+  let renderSeq = 0;
+
+  function effectiveOrigin() {
+    return publicUrlFromServer || siteOrigin || 'https://你的皮肤站域名';
+  }
 
   function postResize() {
     window.parent.postMessage({
@@ -169,6 +176,12 @@
       if (!el) { el = document.createElement('style'); el.id = 'ws-host-fonts'; document.head.appendChild(el); }
       el.textContent = ctx.fontFaceCss;
     }
+    if (typeof ctx.siteOrigin === 'string' && ctx.siteOrigin && ctx.siteOrigin !== 'null') {
+      siteOrigin = ctx.siteOrigin.replace(/\/+$/, '');
+      if (document.getElementById('char-select').value) {
+        updateUrls();
+      }
+    }
     requestAnimationFrame(postResize);
   }
 
@@ -181,36 +194,77 @@
       h.resolve({ status: msg.status, body: msg.body });
       return;
     }
-    if (msg.type === 'wishingskin:host_result' && hostMap.has(msg.id)) {
+    if (msg.type === 'wishingskin:host-response' && hostMap.has(msg.id)) {
       const h = hostMap.get(msg.id); hostMap.delete(msg.id); clearTimeout(h.t);
       if (msg.ok) h.resolve(msg.data);
       else h.reject(new Error(msg.error || '操作失败'));
     }
   });
 
-  function callPlugin(method, path, body) {
+  function callPlugin(method, path, body, query) {
     const id = 'rc-' + (++seq);
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, 10000);
+      const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, 15000);
       reqMap.set(id, { resolve, reject, t });
-      window.parent.postMessage({ type: 'wishingskin:request', id, method, path, body }, '*');
+      window.parent.postMessage({ type: 'wishingskin:request', id, method, path, query, body }, '*');
     });
   }
 
   function callHost(action, payload) {
     const id = 'rch-' + (++seq);
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => { hostMap.delete(id); reject(new Error('宿主响应超时')); }, 10000);
+      const t = setTimeout(() => { hostMap.delete(id); reject(new Error('宿主响应超时')); }, 15000);
       hostMap.set(id, { resolve, reject, t });
       window.parent.postMessage({ type: 'wishingskin:host', id, action, payload }, '*');
     });
   }
 
-  function renderSelected() {
+  function toDataUri(res, fallbackMime) {
+    if (!res || res.status !== 200 || !res.body) return '';
+    if (typeof res.body === 'string') {
+      const mime = fallbackMime || 'image/svg+xml';
+      if (mime.includes('svg')) {
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(res.body);
+      }
+      return '';
+    }
+    if (res.body.bodyBase64) {
+      const mime = res.body.contentType || fallbackMime || 'image/png';
+      return 'data:' + mime + ';base64,' + res.body.bodyBase64;
+    }
+    return '';
+  }
+
+  function updateUrls() {
     const name = document.getElementById('char-select').value;
+    if (!name) return null;
+    const theme = document.getElementById('card-theme').value;
+    const size = document.getElementById('av-size').value;
+    const side = document.getElementById('body-side').value;
+
+    const qName = encodeURIComponent(name);
+    const avQuery = 'name=' + qName + '&size=' + encodeURIComponent(size);
+    const bdQuery = 'name=' + qName + '&side=' + encodeURIComponent(side) + '&scale=6';
+    const cdQuery = 'name=' + qName + '&theme=' + encodeURIComponent(theme);
+
+    const base = effectiveOrigin();
+    const fullAv = base + '/api/plugins/wishingskin.render-card/avatar?' + avQuery;
+    const fullBd = base + '/api/plugins/wishingskin.render-card/body?' + bdQuery;
+    const fullCard = base + '/api/plugins/wishingskin.render-card/card?' + cdQuery;
+
+    document.getElementById('card-url').textContent = fullCard;
+    document.getElementById('avatar-url').textContent = fullAv;
+    document.getElementById('body-url').textContent = fullBd;
+    document.getElementById('md-code').textContent = '![' + name + ' WishingSkin](' + fullCard + ')';
+    document.getElementById('bb-code').textContent = '[img]' + fullCard + '[/img]';
+    return { avQuery, bdQuery, cdQuery };
+  }
+
+  async function renderSelected() {
+    const queries = updateUrls();
     const stage = document.getElementById('stage');
     const linksCard = document.getElementById('links-card');
-    if (!name) {
+    if (!queries) {
       stage.hidden = true;
       linksCard.hidden = true;
       requestAnimationFrame(postResize);
@@ -218,63 +272,67 @@
     }
     stage.hidden = false;
     linksCard.hidden = false;
+    requestAnimationFrame(postResize);
 
-    const theme = document.getElementById('card-theme').value;
-    const size = document.getElementById('av-size').value;
-    const side = document.getElementById('body-side').value;
+    const mySeq = ++renderSeq;
+    const [avRes, bdRes, cdRes] = await Promise.all([
+      callPlugin('GET', '/avatar', undefined, queries.avQuery).catch(() => null),
+      callPlugin('GET', '/body', undefined, queries.bdQuery).catch(() => null),
+      callPlugin('GET', '/card', undefined, queries.cdQuery).catch(() => null)
+    ]);
+    if (mySeq !== renderSeq) return;
 
-    const qName = encodeURIComponent(name);
-    const avPath = '/api/plugins/wishingskin.render-card/avatar?name=' + qName + '&size=' + encodeURIComponent(size);
-    const bdPath = '/api/plugins/wishingskin.render-card/body?name=' + qName + '&side=' + encodeURIComponent(side) + '&scale=6';
-    const cdPath = '/api/plugins/wishingskin.render-card/card?name=' + qName + '&theme=' + encodeURIComponent(theme);
-
-    document.getElementById('img-avatar').src = avPath;
-    document.getElementById('img-body').src = bdPath;
-    document.getElementById('img-card').src = cdPath;
-
-    const fullCard = baseOrigin + cdPath;
-    const fullAv = baseOrigin + avPath;
-    const fullBd = baseOrigin + bdPath;
-
-    document.getElementById('card-url').textContent = fullCard;
-    document.getElementById('avatar-url').textContent = fullAv;
-    document.getElementById('body-url').textContent = fullBd;
-    document.getElementById('md-code').textContent = '![' + name + ' WishingSkin](' + fullCard + ')';
-    document.getElementById('bb-code').textContent = '[img]' + fullCard + '[/img]';
+    const avSrc = toDataUri(avRes, 'image/png');
+    const bdSrc = toDataUri(bdRes, 'image/png');
+    const cdSrc = toDataUri(cdRes, 'image/svg+xml');
+    if (avSrc) document.getElementById('img-avatar').src = avSrc;
+    else document.getElementById('img-avatar').removeAttribute('src');
+    if (bdSrc) document.getElementById('img-body').src = bdSrc;
+    else document.getElementById('img-body').removeAttribute('src');
+    if (cdSrc) document.getElementById('img-card').src = cdSrc;
+    else document.getElementById('img-card').removeAttribute('src');
     requestAnimationFrame(postResize);
   }
 
   async function init() {
-    const [infoRes, charRes] = await Promise.all([
-      callPlugin('GET', '/info').catch(() => null),
-      callHost('listCharacters').catch(() => ({ characters: [] }))
+    const [infoRes, charRes] = await Promise.allSettled([
+      callPlugin('GET', '/info'),
+      callHost('listCharacters')
     ]);
-    if (infoRes && infoRes.status === 200 && infoRes.body) {
-      if (infoRes.body.publicUrl) baseOrigin = String(infoRes.body.publicUrl).replace(/\/+$/, '');
-      if (infoRes.body.defaultTheme) document.getElementById('card-theme').value = infoRes.body.defaultTheme;
+    if (infoRes.status === 'fulfilled' && infoRes.value && infoRes.value.status === 200 && infoRes.value.body) {
+      const b = infoRes.value.body;
+      if (b.publicUrl) publicUrlFromServer = String(b.publicUrl).replace(/\/+$/, '');
+      if (b.defaultTheme) document.getElementById('card-theme').value = b.defaultTheme;
     }
 
     const sel = document.getElementById('char-select');
     sel.innerHTML = '';
-    const chars = (charRes && charRes.characters) || [];
+    const em = document.getElementById('empty-msg');
+    if (charRes.status !== 'fulfilled') {
+      em.hidden = false;
+      em.textContent = '读取角色列表失败，请刷新页面或重新登录后重试。';
+      requestAnimationFrame(postResize);
+      return;
+    }
+    const chars = (charRes.value && charRes.value.characters) || [];
     if (chars.length === 0) {
-      const em = document.getElementById('empty-msg');
       em.hidden = false;
       em.textContent = '你还没有创建角色，请先前往“角色管理”创建角色后再生成名片。';
       requestAnimationFrame(postResize);
       return;
     }
+    em.hidden = true;
     for (const c of chars) {
       const opt = document.createElement('option');
       opt.value = c.name;
       opt.textContent = c.name + (c.model === 'slim' ? '（Alex）' : '（Steve）');
       sel.appendChild(opt);
     }
-    renderSelected();
+    void renderSelected();
   }
 
   for (const id of ['char-select', 'card-theme', 'av-size', 'body-side']) {
-    document.getElementById(id).addEventListener('change', renderSelected);
+    document.getElementById(id).addEventListener('change', () => void renderSelected());
   }
 
   document.addEventListener('click', async (e) => {

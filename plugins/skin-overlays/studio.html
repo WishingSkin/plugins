@@ -37,6 +37,7 @@
     --danger: #f87171;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; padding: 4px; background: transparent; color: var(--ink); font: 14px/1.55 var(--font-sans); }
   .layout { display: grid; gap: 14px; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); display: grid; gap: 12px; }
@@ -139,7 +140,7 @@
         </label>
         <div class="row">
           <button id="apply-btn" class="primary" type="submit" disabled>合成并保存</button>
-          <a id="dl-link" download="overlay-skin.png" hidden><button type="button">下载 PNG</button></a>
+          <button id="dl-btn" type="button" hidden>下载 PNG</button>
           <span id="apply-msg" class="msg"></span>
         </div>
       </form>
@@ -159,6 +160,7 @@
   let selectedLayers = new Map(); // id -> opacity
   let lastResult = null;
   let dirty = false;
+  let previewSeq = 0;
 
   function postResize() {
     window.parent.postMessage({
@@ -192,12 +194,12 @@
       if (!el) { el = document.createElement('style'); el.id = 'ws-host-fonts'; document.head.appendChild(el); }
       el.textContent = ctx.fontFaceCss;
     }
-    if (!baseSkin && ctx.textureHash) {
-      setSourceSkin({
-        fileHash: ctx.textureHash,
-        name: ctx.textureName || '当前皮肤',
-        model: ctx.textureModel === 'slim' ? 'slim' : 'default'
-      });
+    const tex = ctx.texture && typeof ctx.texture === 'object' ? ctx.texture : null;
+    const ctxHash = (tex && tex.fileHash) || ctx.textureHash || '';
+    const ctxName = (tex && tex.name) || ctx.textureName || '当前皮肤';
+    const ctxModel = (tex && tex.model) || ctx.textureModel || 'default';
+    if (!baseSkin && ctxHash) {
+      void loadSourceFromHash(ctxHash, ctxName, ctxModel === 'slim' ? 'slim' : 'default');
     }
     requestAnimationFrame(postResize);
   }
@@ -211,7 +213,7 @@
       h.resolve({ status: msg.status, body: msg.body });
       return;
     }
-    if (msg.type === 'wishingskin:host_result' && hostMap.has(msg.id)) {
+    if (msg.type === 'wishingskin:host-response' && hostMap.has(msg.id)) {
       const h = hostMap.get(msg.id); hostMap.delete(msg.id); clearTimeout(h.t);
       if (msg.ok) h.resolve(msg.data);
       else h.reject(Object.assign(new Error(msg.error || '操作失败'), { status: msg.status }));
@@ -241,6 +243,21 @@
     if (dirty === val) return;
     dirty = val;
     callHost('setDirty', { dirty: val }).catch(() => {});
+  }
+
+  async function loadSourceFromHash(fileHash, name, model) {
+    setSourceSkin({ fileHash, name, model });
+    try {
+      const res = await callHost('getTextureDataUrl', { hash: fileHash });
+      if (res && res.dataUrl && baseSkin && baseSkin.fileHash === fileHash) {
+        baseSkin.dataUrl = res.dataUrl;
+        const thumb = document.getElementById('source-thumb');
+        thumb.src = res.dataUrl;
+        thumb.hidden = false;
+      }
+    } catch {
+      // Keep source metadata without thumbnail if host fetch fails
+    }
   }
 
   function setSourceSkin(skin) {
@@ -338,16 +355,17 @@
     const applyBtn = document.getElementById('apply-btn');
     const prevArea = document.getElementById('preview-area');
     const emptyEl = document.getElementById('preview-empty');
-    const dlLink = document.getElementById('dl-link');
+    const dlBtn = document.getElementById('dl-btn');
     const ovMsg = document.getElementById('ov-msg');
     ovMsg.textContent = '';
 
+    const mySeq = ++previewSeq;
     if (!baseSkin || selectedLayers.size === 0) {
       lastResult = null;
       prevArea.hidden = true;
       emptyEl.hidden = false;
       applyBtn.disabled = true;
-      dlLink.hidden = true;
+      dlBtn.hidden = true;
       setDirty(false);
       requestAnimationFrame(postResize);
       return;
@@ -363,6 +381,7 @@
         clearHat: document.getElementById('opt-clear-hat').checked,
         layers
       });
+      if (mySeq !== previewSeq) return;
       if (res.status !== 200) {
         ovMsg.className = 'msg err';
         ovMsg.textContent = (res.body && res.body.error) || '生成预览失败';
@@ -375,8 +394,7 @@
       applyBtn.disabled = false;
       document.getElementById('prev-front').src = 'data:image/png;base64,' + lastResult.frontPreviewBase64;
       document.getElementById('prev-back').src = 'data:image/png;base64,' + lastResult.backPreviewBase64;
-      dlLink.href = 'data:image/png;base64,' + lastResult.pngBase64;
-      dlLink.hidden = false;
+      dlBtn.hidden = false;
 
       callHost('setPreview', {
         pngBase64: lastResult.pngBase64,
@@ -386,18 +404,16 @@
 
       setDirty(true);
     } catch (err) {
+      if (mySeq !== previewSeq) return;
       ovMsg.className = 'msg err';
       ovMsg.textContent = err.message || '预览失败';
     }
     requestAnimationFrame(postResize);
   }
 
-  async function init() {
-    const [ovRes, charData] = await Promise.all([
-      callPlugin('GET', '/overlays'),
-      callHost('listCharacters').catch(() => ({ characters: [] }))
-    ]);
-    if (ovRes.status === 200 && ovRes.body) {
+  async function initOverlays() {
+    const ovRes = await callPlugin('GET', '/overlays').catch(() => null);
+    if (ovRes && ovRes.status === 200 && ovRes.body) {
       overlayMeta = {
         maxLayers: ovRes.body.maxLayers || 3,
         pointsCost: ovRes.body.pointsCost || 0,
@@ -418,7 +434,10 @@
       }
       renderOverlayCards();
     }
+  }
 
+  async function initCharacters() {
+    const charData = await callHost('listCharacters').catch(() => ({ characters: [] }));
     const sel = document.getElementById('save-char');
     sel.innerHTML = '<option value="0">仅保存至我的材质库</option>';
     for (const c of (charData && charData.characters) || []) {
@@ -428,6 +447,21 @@
       sel.appendChild(opt);
     }
   }
+
+  function init() {
+    void initOverlays();
+    void initCharacters();
+  }
+
+  document.getElementById('dl-btn').addEventListener('click', () => {
+    if (!lastResult || !lastResult.pngBase64) return;
+    const rawName = document.getElementById('save-name').value.trim() || 'overlay-skin';
+    callHost('downloadFile', {
+      filename: rawName + '.png',
+      mimeType: 'image/png',
+      dataBase64: lastResult.pngBase64
+    }).catch(() => {});
+  });
 
   document.getElementById('pick-site-btn').addEventListener('click', async () => {
     try {
@@ -476,13 +510,14 @@
 
     const layers = [...selectedLayers.entries()].map(([id, opacity]) => ({ id, opacity }));
     try {
+      const charId = Number(document.getElementById('save-char').value) || 0;
       const res = await callPlugin('POST', '/apply', {
         fileHash: baseSkin.fileHash || '',
         pngBase64: baseSkin.pngBase64 || '',
         name: document.getElementById('save-name').value.trim(),
         model: document.getElementById('model-select').value,
         isPublic: !document.getElementById('public-wrap').hidden && document.getElementById('save-public').checked,
-        characterId: Number(document.getElementById('save-char').value) || 0,
+        characterId: charId,
         upgradeLegacy: document.getElementById('opt-upgrade').checked,
         clearHat: document.getElementById('opt-clear-hat').checked,
         layers,
@@ -499,6 +534,7 @@
         ? '已保存并提交审核，审核通过后生效。'
         : (res.body.bound ? '合成成功并已穿戴到所选角色！' : '合成成功并已保存至材质库！');
       callHost('notify', { message: msgEl.textContent, kind: 'success' }).catch(() => {});
+      callHost('notifyMutated', { textures: true, characters: charId > 0 }).catch(() => {});
     } catch (err) {
       msgEl.className = 'msg err';
       msgEl.textContent = err.message || '保存失败';

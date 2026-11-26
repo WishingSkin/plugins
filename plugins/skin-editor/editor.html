@@ -37,6 +37,7 @@
     --danger: #f87171;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; padding: 4px; background: transparent; color: var(--ink); font: 14px/1.55 var(--font-sans); user-select: none; }
   .layout { display: grid; gap: 12px; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); display: grid; gap: 12px; }
@@ -285,6 +286,11 @@
   let dirty = false;
   let previewTimer = null;
   let loadedFromHostHash = false;
+  let netSignature = '';
+  let netTiles = {};
+  let netCanvases = {};
+  let strokeRafPending = false;
+  let resizeRafPending = false;
 
   function postResize() {
     window.parent.postMessage({
@@ -292,10 +298,18 @@
       height: Math.max(420, Math.ceil(document.documentElement.scrollHeight))
     }, '*');
   }
-  if (typeof ResizeObserver !== 'undefined') {
-    new ResizeObserver(postResize).observe(document.documentElement);
+  function scheduleResize() {
+    if (resizeRafPending) return;
+    resizeRafPending = true;
+    requestAnimationFrame(() => {
+      resizeRafPending = false;
+      postResize();
+    });
   }
-  window.addEventListener('load', postResize);
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(scheduleResize).observe(document.documentElement);
+  }
+  window.addEventListener('load', scheduleResize);
 
   function applyHostContext(ctx) {
     if (!ctx || typeof ctx !== 'object') return;
@@ -317,11 +331,15 @@
       if (!el) { el = document.createElement('style'); el.id = 'ws-host-fonts'; document.head.appendChild(el); }
       el.textContent = ctx.fontFaceCss;
     }
-    if (!loadedFromHostHash && ctx.textureHash) {
+    const tex = ctx.texture && typeof ctx.texture === 'object' ? ctx.texture : null;
+    const ctxHash = (tex && tex.fileHash) || ctx.textureHash || '';
+    const ctxName = (tex && tex.name) || ctx.textureName || '';
+    const ctxModel = (tex && tex.model) || ctx.textureModel || 'default';
+    if (!loadedFromHostHash && ctxHash) {
       loadedFromHostHash = true;
-      void loadSkinFromHash(ctx.textureHash, ctx.textureName, ctx.textureModel);
+      void loadSkinFromHash(ctxHash, ctxName, ctxModel);
     }
-    requestAnimationFrame(postResize);
+    scheduleResize();
   }
 
   window.addEventListener('message', (event) => {
@@ -333,7 +351,7 @@
       h.resolve({ status: msg.status, body: msg.body });
       return;
     }
-    if (msg.type === 'wishingskin:host_result' && hostMap.has(msg.id)) {
+    if (msg.type === 'wishingskin:host-response' && hostMap.has(msg.id)) {
       const h = hostMap.get(msg.id); hostMap.delete(msg.id); clearTimeout(h.t);
       if (msg.ok) h.resolve(msg.data);
       else h.reject(Object.assign(new Error(msg.error || '操作失败'), { status: msg.status }));
@@ -562,10 +580,10 @@
 
   function renderSplitNet() {
     const net = document.getElementById('net-grid');
-    net.innerHTML = '';
     const parts = getPartsUV(skinModel);
     const faces = parts[activePart][activeLayer];
     const baseFaces = parts[activePart].base;
+    const sig = activePart + ':' + activeLayer + ':' + skinModel;
 
     // 4 cols x 3 rows standard Minecraft box net layout
     const layout = [
@@ -574,24 +592,49 @@
       null, 'bottom', null, null
     ];
 
-    for (const faceKey of layout) {
-      if (!faceKey) {
-        const spacer = document.createElement('div');
-        net.appendChild(spacer);
-        continue;
+    if (netSignature !== sig) {
+      netSignature = sig;
+      net.innerHTML = '';
+      netTiles = {};
+      netCanvases = {};
+      for (const faceKey of layout) {
+        if (!faceKey) {
+          net.appendChild(document.createElement('div'));
+          continue;
+        }
+        const f = faces[faceKey];
+        const tile = document.createElement('button');
+        tile.type = 'button';
+        tile.className = 'net-tile';
+        tile.title = f.label + ' (' + f.w + '×' + f.h + ')';
+
+        const c = document.createElement('canvas');
+        const tileScale = f.h > 8 ? 3 : 4;
+        c.width = f.w * tileScale;
+        c.height = f.h * tileScale;
+
+        const lbl = document.createElement('span');
+        lbl.textContent = f.label;
+        tile.append(c, lbl);
+        tile.addEventListener('click', () => {
+          activeFace = faceKey;
+          renderEditorViews();
+        });
+        net.appendChild(tile);
+        netTiles[faceKey] = tile;
+        netCanvases[faceKey] = c;
       }
+    }
+
+    for (const faceKey of FACE_ORDER) {
+      const tile = netTiles[faceKey];
+      const c = netCanvases[faceKey];
+      if (!tile || !c) continue;
+      tile.classList.toggle('active', activeFace === faceKey);
       const f = faces[faceKey];
       const bf = baseFaces[faceKey];
-      const tile = document.createElement('button');
-      tile.type = 'button';
-      tile.className = 'net-tile' + (activeFace === faceKey ? ' active' : '');
-      tile.title = f.label + ' (' + f.w + '×' + f.h + ')';
-
-      const c = document.createElement('canvas');
-      const tileScale = f.h > 8 ? 3 : 4;
-      c.width = f.w * tileScale;
-      c.height = f.h * tileScale;
       const tctx = c.getContext('2d');
+      tctx.clearRect(0, 0, c.width, c.height);
       tctx.imageSmoothingEnabled = false;
       if (activeLayer === 'outer') {
         tctx.globalAlpha = 0.28;
@@ -599,15 +642,6 @@
         tctx.globalAlpha = 1;
       }
       tctx.drawImage(skinCanvas, f.x, f.y, f.w, f.h, 0, 0, c.width, c.height);
-
-      const lbl = document.createElement('span');
-      lbl.textContent = f.label;
-      tile.append(c, lbl);
-      tile.addEventListener('click', () => {
-        activeFace = faceKey;
-        renderEditorViews();
-      });
-      net.appendChild(tile);
     }
 
     const af = faces[activeFace];
@@ -738,14 +772,23 @@
     }
   }
 
-  function renderEditorViews() {
+  function renderEditorViews(skipResize) {
     if (mode === 'split') {
       renderSplitNet();
       renderSplitCanvas();
     } else {
       renderFullUVCanvas();
     }
-    requestAnimationFrame(postResize);
+    if (!skipResize) scheduleResize();
+  }
+
+  function scheduleStrokeRender() {
+    if (strokeRafPending) return;
+    strokeRafPending = true;
+    requestAnimationFrame(() => {
+      strokeRafPending = false;
+      renderEditorViews(true);
+    });
   }
 
   function commitShape(x0, y0, x1, y1, bounds, altDark) {
@@ -799,12 +842,12 @@
 
       if (tool === 'line' || tool === 'rect') {
         shapeStart = pos; shapeEnd = pos;
-        renderEditorViews();
+        scheduleStrokeRender();
         return;
       }
 
       paintPoints([[pos.px, pos.py]], e.altKey);
-      renderEditorViews();
+      scheduleStrokeRender();
     });
 
     canvas.addEventListener('pointermove', (e) => {
@@ -820,7 +863,7 @@
 
       if (tool === 'line' || tool === 'rect') {
         shapeEnd = pos;
-        renderEditorViews();
+        scheduleStrokeRender();
         return;
       }
       if (lastPos && lastPos.px === pos.px && lastPos.py === pos.py) return;
@@ -829,7 +872,7 @@
       else pts.push([pos.px, pos.py]);
       paintPoints(pts, e.altKey);
       lastPos = pos;
-      renderEditorViews();
+      scheduleStrokeRender();
     });
 
     const finish = (e) => {
@@ -871,13 +914,34 @@
     return { mode: 'uv', px, py, lx: px, ly: py, bounds: { x: 0, y: 0, w: 64, h: 64 } };
   });
 
+  function mirrorLegacyLimb(srcX, srcY, dstX, dstY, armW) {
+    // Copy flipped faces from legacy 64x32 right leg/arm to 64x64 left leg/arm
+    const d = 4, h = 12, w = armW;
+    const copyFlip = (sx, sy, dx, dy, fw, fh) => {
+      skinCtx.save();
+      skinCtx.translate(dx + fw, dy);
+      skinCtx.scale(-1, 1);
+      skinCtx.drawImage(skinCanvas, sx, sy, fw, fh, 0, 0, fw, fh);
+      skinCtx.restore();
+    };
+    copyFlip(srcX + d, srcY, dstX + d, dstY, w, d);                 // top
+    copyFlip(srcX + d + w, srcY, dstX + d + w, dstY, w, d);         // bottom
+    copyFlip(srcX + d + w, srcY + d, dstX, dstY + d, d, h);         // old left -> new right
+    copyFlip(srcX + d, srcY + d, dstX + d, dstY + d, w, h);         // front
+    copyFlip(srcX, srcY + d, dstX + d + w, dstY + d, d, h);         // old right -> new left
+    copyFlip(srcX + 2 * d + w, srcY + d, dstX + 2 * d + w, dstY + d, w, h); // back
+  }
+
   function loadImageDataUrl(dataUrl, model, name, markDirty) {
+    const nextModel = (model === 'slim' || model === 'default') ? model : skinModel;
     const img = new Image();
     img.onload = () => {
       skinCtx.clearRect(0, 0, 64, 64);
       skinCtx.imageSmoothingEnabled = false;
       if (img.width === 64 && img.height === 32) {
         skinCtx.drawImage(img, 0, 0);
+        mirrorLegacyLimb(0, 16, 16, 48, 4);
+        mirrorLegacyLimb(40, 16, 32, 48, nextModel === 'slim' ? 3 : 4);
       } else {
         skinCtx.drawImage(img, 0, 0, 64, 64);
       }
@@ -1041,10 +1105,12 @@
   });
 
   document.getElementById('dl-btn').addEventListener('click', () => {
-    const a = document.createElement('a');
-    a.href = skinCanvas.toDataURL('image/png');
-    a.download = (document.getElementById('save-name').value.trim() || 'skin') + '.png';
-    a.click();
+    const name = (document.getElementById('save-name').value.trim() || 'skin') + '.png';
+    callHost('downloadFile', {
+      filename: name,
+      mimeType: 'image/png',
+      dataBase64: skinCanvas.toDataURL('image/png')
+    }).catch(() => {});
   });
 
   document.getElementById('save-btn').addEventListener('click', async () => {
@@ -1061,7 +1127,7 @@
       });
       const recId = saved && (saved.id || (saved.record && saved.record.id));
       const charId = Number(document.getElementById('save-char').value) || 0;
-      const pending = !!(saved && (saved.pendingReview || (saved.record && saved.record.reviewState === 'pending')));
+      const pending = !!(saved && (saved.reviewState === 'pending' || saved.pendingReview || (saved.record && saved.record.reviewState === 'pending')));
       if (charId > 0 && recId && !pending) {
         await callHost('applyTexture', {
           characterId: charId,
@@ -1077,6 +1143,7 @@
       }
       setDirty(false);
       callHost('notify', { message: document.getElementById('editor-msg').textContent, kind: 'success' }).catch(() => {});
+      callHost('notifyMutated', { textures: true, characters: charId > 0 && !pending }).catch(() => {});
     } catch (err) {
       setMsg((err && err.message) || '保存失败', 'err');
     } finally {
@@ -1084,13 +1151,8 @@
     }
   });
 
-  async function init() {
-    renderSwatches();
-    const [tplRes, charData] = await Promise.all([
-      callPlugin('GET', '/templates').catch(() => null),
-      callHost('listCharacters').catch(() => ({ characters: [] }))
-    ]);
-
+  async function initTemplates() {
+    const tplRes = await callPlugin('GET', '/templates').catch(() => null);
     if (tplRes && tplRes.status === 200 && tplRes.body && Array.isArray(tplRes.body.templates)) {
       templatesCache = tplRes.body.templates;
       const tplSel = document.getElementById('tpl-select');
@@ -1100,12 +1162,15 @@
         opt.textContent = t.name;
         tplSel.appendChild(opt);
       }
-      if (!loadedFromHostHash && templatesCache.length > 0) {
+      if (!loadedFromHostHash && !dirty && templatesCache.length > 0) {
         const first = templatesCache[0];
         loadImageDataUrl('data:image/png;base64,' + first.pngBase64, first.model === 'slim' ? 'slim' : 'default', '我的原创皮肤', false);
       }
     }
+  }
 
+  async function initCharacters() {
+    const charData = await callHost('listCharacters').catch(() => ({ characters: [] }));
     const charSel = document.getElementById('save-char');
     charSel.innerHTML = '<option value="0">仅保存到我的材质库</option>';
     for (const c of (charData && charData.characters) || []) {
@@ -1114,8 +1179,13 @@
       opt.textContent = c.name + (c.model === 'slim' ? '（纤细）' : '（经典）');
       charSel.appendChild(opt);
     }
+  }
 
+  function init() {
+    renderSwatches();
     renderEditorViews();
+    void initTemplates();
+    void initCharacters();
   }
 
   void init();

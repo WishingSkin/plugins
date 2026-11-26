@@ -1,11 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -187,5 +193,289 @@ func TestSevenDayHistoryPersistenceSaveDeleteAndIsolation(t *testing.T) {
 	drt := delResp.(sdk.RuntimeResponse)
 	if drt.Status != 200 || string(drt.Writes["hist_item:"+started.JobID]) != "null" || string(drt.Writes["hist_idx:7"]) != "[]" {
 		t.Fatalf("unexpected delete writes: status=%d writes=%v", drt.Status, drt.Writes)
+	}
+}
+
+func makeSampleRefPNGBase64() string {
+	img := image.NewNRGBA(image.Rect(0, 0, 16, 16))
+	for y := 0; y < 16; y++ {
+		for x := 0; x < 16; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{40, 130, 220, 255})
+		}
+	}
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, img)
+	return base64.StdEncoding.EncodeToString(buf.Bytes())
+}
+
+func TestParseAIConfigTimeoutDefaultAndClamping(t *testing.T) {
+	if got := parseAIConfig(nil).Timeout; got != 90*time.Second {
+		t.Fatalf("nil settings Timeout = %v, want 90s", got)
+	}
+	if got := parseAIConfig(map[string]any{"timeout_seconds": float64(0)}).Timeout; got != 90*time.Second {
+		t.Fatalf("zero timeout_seconds = %v, want 90s", got)
+	}
+	if got := parseAIConfig(map[string]any{"timeout_seconds": float64(5)}).Timeout; got != 15*time.Second {
+		t.Fatalf("small timeout_seconds = %v, want 15s", got)
+	}
+	if got := parseAIConfig(map[string]any{"timeout_seconds": float64(180)}).Timeout; got != 180*time.Second {
+		t.Fatalf("explicit timeout_seconds = %v, want 180s", got)
+	}
+	if got := parseAIConfig(map[string]any{"timeout_seconds": float64(999)}).Timeout; got != 240*time.Second {
+		t.Fatalf("large timeout_seconds = %v, want 240s", got)
+	}
+}
+
+func TestMultimodalReferenceImageVisionLLM(t *testing.T) {
+	resetJobManagerForTest()
+
+	var sawVisionPart atomic.Bool
+	llmSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var raw map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&raw)
+		if msgs, ok := raw["messages"].([]any); ok {
+			for _, m := range msgs {
+				mm, _ := m.(map[string]any)
+				if mm["role"] == "user" {
+					if parts, ok := mm["content"].([]any); ok {
+						for _, p := range parts {
+							pm, _ := p.(map[string]any)
+							if pm["type"] == "image_url" {
+								sawVisionPart.Store(true)
+							}
+						}
+					}
+				}
+			}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{
+				"message": map[string]any{
+					"content": `{"summary":"蓝衣参考少女","model":"slim","skinTone":"#F5CBA7","hairColor":"#1E293B","hairStyle":"long","eyeColor":"#2563EB","eyeStyle":"anime","outfitStyle":"coat","topPrimary":"#2563EB","topSecondary":"#1D4ED8","topAccent":"#93C5FD","bottomStyle":"skirt","sleeveStyle":"long","bottomPrimary":"#0F172A","shoeColor":"#111827","accessory":"scarf","accessoryColor":"#38BDF8"}`,
+				},
+			}},
+		})
+	}))
+	defer llmSrv.Close()
+
+	settings := map[string]any{
+		"default_engine":   "structured_llm",
+		"llm_api_url":      llmSrv.URL + "/v1",
+		"llm_api_key":      "sk-vis",
+		"daily_limit":      float64(5),
+		"cooldown_seconds": float64(0),
+	}
+	data := map[string]json.RawMessage{}
+	user := sdk.Principal{ID: 11}
+
+	badResp, _ := handleRequest(context.Background(), sdk.RuntimeRequest{
+		Kind: "route", Method: "POST", Path: "/generate", Principal: user, Settings: settings, Data: data,
+		Body: mustJSON(map[string]any{"prompt": "测试", "engine": "structured_llm", "referenceImageBase64": "not-valid-image"}),
+	})
+	if badResp.(sdk.RuntimeResponse).Status != 400 {
+		t.Fatalf("expected 400 for invalid reference image, got %+v", badResp)
+	}
+
+	genResp, _ := handleRequest(context.Background(), sdk.RuntimeRequest{
+		Kind: "route", Method: "POST", Path: "/generate", Principal: user, Settings: settings, Data: data,
+		Body: mustJSON(map[string]any{
+			"prompt":               "还原参考图蓝衣少女",
+			"engine":               "structured_llm",
+			"model":                "slim",
+			"referenceImageBase64": "data:image/png;base64," + makeSampleRefPNGBase64(),
+		}),
+	})
+	grt := genResp.(sdk.RuntimeResponse)
+	if grt.Status != 202 {
+		t.Fatalf("expected 202, got %+v", grt)
+	}
+	var started struct {
+		JobID string `json:"jobId"`
+	}
+	_ = json.Unmarshal(grt.Body, &started)
+	job, _ := pollUntilTerminal(t, started.JobID, settings, data, user)
+	if job.Status != "succeeded" || !sawVisionPart.Load() {
+		t.Fatalf("expected vision multimodal call to succeed: status=%s err=%q sawVision=%v", job.Status, job.Error, sawVisionPart.Load())
+	}
+}
+
+func TestImageAPIBaseJobRefinementRoutesToEdits(t *testing.T) {
+	resetJobManagerForTest()
+
+	var sawGenerations atomic.Bool
+	var sawEditsUpload atomic.Bool
+	var sawBaseSkinDimensions atomic.Bool
+
+	imgSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		skinBytes := make1024x1024ValidSkinWithGarbageDeadZones()
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/images/generations"):
+			sawGenerations.Store(true)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{{"b64_json": base64.StdEncoding.EncodeToString(skinBytes)}},
+			})
+		case strings.HasSuffix(r.URL.Path, "/images/edits"):
+			if err := r.ParseMultipartForm(16 << 20); err == nil {
+				if fh, _, err := r.FormFile("image"); err == nil {
+					defer fh.Close()
+					if img, _, err := image.Decode(fh); err == nil {
+						sawEditsUpload.Store(true)
+						if img.Bounds().Dx() == 1024 && img.Bounds().Dy() == 1024 {
+							sawBaseSkinDimensions.Store(true)
+						}
+					}
+				}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{{"b64_json": base64.StdEncoding.EncodeToString(skinBytes)}},
+			})
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer imgSrv.Close()
+
+	settings := map[string]any{
+		"default_engine":       "image_api",
+		"image_api_url":        imgSrv.URL + "/v1",
+		"image_api_key":        "sk-img",
+		"allow_private_worker": true,
+		"daily_limit":          float64(5),
+		"cooldown_seconds":     float64(0),
+	}
+	data := map[string]json.RawMessage{}
+	user := sdk.Principal{ID: 12}
+
+	gen1, _ := handleRequest(context.Background(), sdk.RuntimeRequest{
+		Kind: "route", Method: "POST", Path: "/generate", Principal: user, Settings: settings, Data: data,
+		Body: mustJSON(map[string]any{"prompt": "白色机甲战士", "engine": "image_api"}),
+	})
+	var s1 struct {
+		JobID string `json:"jobId"`
+	}
+	_ = json.Unmarshal(gen1.(sdk.RuntimeResponse).Body, &s1)
+	j1, _ := pollUntilTerminal(t, s1.JobID, settings, data, user)
+	if j1.Status != "succeeded" || !sawGenerations.Load() {
+		t.Fatalf("first image_api job failed: %+v", j1)
+	}
+
+	// Simulate restart so refine resolves strictly from persisted 7-day history.
+	resetJobManagerForTest()
+
+	gen2, _ := handleRequest(context.Background(), sdk.RuntimeRequest{
+		Kind: "route", Method: "POST", Path: "/generate", Principal: user, Settings: settings, Data: data,
+		Body: mustJSON(map[string]any{"prompt": "把肩甲改成金色", "engine": "image_api", "baseJobId": s1.JobID}),
+	})
+	if gen2.(sdk.RuntimeResponse).Status != 202 {
+		t.Fatalf("refine image_api generate failed: %+v", gen2)
+	}
+	var s2 struct {
+		JobID string `json:"jobId"`
+	}
+	_ = json.Unmarshal(gen2.(sdk.RuntimeResponse).Body, &s2)
+	j2, _ := pollUntilTerminal(t, s2.JobID, settings, data, user)
+	if j2.Status != "succeeded" || !sawEditsUpload.Load() || !sawBaseSkinDimensions.Load() {
+		t.Fatalf("expected /images/edits upload with 1024x1024 base skin: status=%s err=%q edits=%v dim=%v", j2.Status, j2.Error, sawEditsUpload.Load(), sawBaseSkinDimensions.Load())
+	}
+}
+
+func TestAdminTestAsyncDryRunDoesNotChargeOrWriteHistory(t *testing.T) {
+	resetJobManagerForTest()
+
+	var spendCalls atomic.Int32
+	hostSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/points/spend") {
+			spendCalls.Add(1)
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer hostSrv.Close()
+	t.Setenv("WS_HOST_API_URL", hostSrv.URL)
+	t.Setenv("WS_HOST_API_TOKEN", "admin-dry")
+
+	settings := map[string]any{
+		"allow_local_fallback": true,
+		"points_cost":          float64(50),
+		"daily_limit":          float64(0),
+	}
+	data := map[string]json.RawMessage{}
+	admin := sdk.Principal{ID: 1, Admin: true}
+
+	resp, _ := handleRequest(context.Background(), sdk.RuntimeRequest{
+		Kind: "route", Method: "POST", Path: "/admin/test", Principal: admin, Settings: settings, Data: data,
+		Body: mustJSON(map[string]any{"engine": "local_demo", "prompt": "骑士盔甲", "async": true}),
+	})
+	rt := resp.(sdk.RuntimeResponse)
+	if rt.Status != 202 {
+		t.Fatalf("expected 202 for async admin test, got %+v", rt)
+	}
+	var started struct {
+		JobID  string `json:"jobId"`
+		DryRun bool   `json:"dryRun"`
+	}
+	_ = json.Unmarshal(rt.Body, &started)
+	if !started.DryRun || started.JobID == "" {
+		t.Fatalf("expected dryRun jobId, got %s", rt.Body)
+	}
+
+	job, jobRT := pollUntilTerminal(t, started.JobID, settings, data, admin)
+	if job.Status != "succeeded" || job.PointsSpent != 0 || spendCalls.Load() != 0 {
+		t.Fatalf("dryRun job should succeed with 0 points spent: job=%+v spendCalls=%d", job, spendCalls.Load())
+	}
+	if _, hasHist := jobRT.Writes["hist_idx:1"]; hasHist {
+		t.Fatalf("dryRun admin test must not write user history index")
+	}
+}
+
+func TestGlobalHistoryCapEvictsOldestAt48Items(t *testing.T) {
+	resetJobManagerForTest()
+
+	settings := map[string]any{
+		"allow_local_fallback": true,
+		"daily_limit":          float64(100),
+		"cooldown_seconds":     float64(0),
+	}
+	data := map[string]json.RawMessage{}
+	var allJobIDs []string
+
+	for uid := int64(21); uid <= 25; uid++ {
+		user := sdk.Principal{ID: uid}
+		for i := 0; i < 10; i++ {
+			resp, _ := handleRequest(context.Background(), sdk.RuntimeRequest{
+				Kind: "route", Method: "POST", Path: "/generate", Principal: user, Settings: settings, Data: data,
+				Body: mustJSON(map[string]any{"prompt": "测试角色", "engine": "local_demo"}),
+			})
+			rt := resp.(sdk.RuntimeResponse)
+			if rt.Status != 202 {
+				t.Fatalf("generate %d/%d failed: %+v", uid, i, rt)
+			}
+			var s struct {
+				JobID string `json:"jobId"`
+			}
+			_ = json.Unmarshal(rt.Body, &s)
+			allJobIDs = append(allJobIDs, s.JobID)
+			job, _ := pollUntilTerminal(t, s.JobID, settings, data, user)
+			if job.Status != "succeeded" {
+				t.Fatalf("job %s failed: %+v", s.JobID, job)
+			}
+			if len(allJobIDs) <= 2 {
+				time.Sleep(5 * time.Millisecond)
+			}
+		}
+	}
+
+	// Count live non-null hist_item keys persisted across all users (should be capped at maxGlobalHistoryItems = 48).
+	liveItems := 0
+	for k, v := range data {
+		if strings.HasPrefix(k, histItemPrefix) && string(v) != "null" && len(v) > 0 {
+			liveItems++
+		}
+	}
+	if liveItems != maxGlobalHistoryItems {
+		t.Fatalf("expected %d live persisted history items, got %d", maxGlobalHistoryItems, liveItems)
+	}
+	if string(data[histItemPrefix+allJobIDs[0]]) != "null" || string(data[histItemPrefix+allJobIDs[1]]) != "null" {
+		t.Fatalf("expected oldest two items (%s, %s) to be evicted with null tombstone", allJobIDs[0], allJobIDs[1])
 	}
 }

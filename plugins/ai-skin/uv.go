@@ -149,7 +149,7 @@ func SanitizeAndValidateSkin(src *image.NRGBA, slim bool) (*image.NRGBA, error) 
 	return cleaned, nil
 }
 
-// BuildUVGuidePNG creates a color-coded 64x64 Minecraft UV layout guide for image-edit endpoints.
+// BuildUVGuidePNG creates a crisp 1024x1024 color-coded Minecraft UV layout guide for image-edit endpoints.
 func BuildUVGuidePNG(slim bool) []byte {
 	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
 	baseRects, outerRects := minecraftUVRects(slim)
@@ -182,15 +182,29 @@ func BuildUVGuidePNG(slim bool) []byte {
 		}
 		fill(r, palette[cIdx])
 	}
-	// Mark eyes on Head Front so edit models align facial features.
+	// Mark eyes on Head Front & neckline so edit models align character features.
 	img.SetNRGBA(9, 12, color.NRGBA{255, 255, 255, 255})
 	img.SetNRGBA(10, 12, color.NRGBA{48, 86, 168, 255})
 	img.SetNRGBA(13, 12, color.NRGBA{48, 86, 168, 255})
 	img.SetNRGBA(14, 12, color.NRGBA{255, 255, 255, 255})
+	img.SetNRGBA(23, 20, color.NRGBA{242, 200, 168, 255})
+	img.SetNRGBA(24, 20, color.NRGBA{242, 200, 168, 255})
 	for _, r := range outerRects {
 		fill(r, color.NRGBA{210, 214, 224, 96})
 	}
-	b, _ := skinpng.EncodePNG(img)
+	scaled := skinpng.ScaleNearest(img, 1024, 1024)
+	b, _ := skinpng.EncodePNG(scaled)
+	return b
+}
+
+// UpscaleSkinForEditPNG upscales an existing 64x64 skin nearest-neighbor to 1024x1024 for /images/edits refinement.
+func UpscaleSkinForEditPNG(skin *image.NRGBA) []byte {
+	if skin == nil {
+		return nil
+	}
+	sq := skinpng.Upgrade64x32To64x64(skin)
+	scaled := skinpng.ScaleNearest(sq, 1024, 1024)
+	b, _ := skinpng.EncodePNG(scaled)
 	return b
 }
 

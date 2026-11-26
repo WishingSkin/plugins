@@ -41,6 +41,7 @@
     --danger-bg: rgba(248, 113, 113, 0.14);
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; padding: 4px; background: transparent; color: var(--ink); font: 14px/1.55 var(--font-sans); }
   .layout { display: grid; gap: 14px; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); display: grid; gap: 12px; }
@@ -62,9 +63,27 @@
   .meta-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; background: var(--subtle); border: 1px solid var(--border); font-size: 12px; color: var(--muted); }
   .badge.accent { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 600; }
-  .progress { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-ctl); background: var(--subtle); border: 1px solid var(--border); }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); animation: pulse 1.1s infinite ease-in-out; flex-shrink: 0; }
-  @keyframes pulse { 0%, 100% { transform: scale(0.85); opacity: 0.5; } 50% { transform: scale(1.15); opacity: 1; } }
+  .progress { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-ctl); background: var(--subtle); border: 1px solid var(--border); }
+  .px-loader { display: grid; grid-template-columns: repeat(2, 7px); gap: 2px; flex-shrink: 0; }
+  .px-loader i { display: block; width: 7px; height: 7px; border-radius: 1px; background: var(--accent); animation: px-step 1s steps(4, end) infinite; }
+  .px-loader i:nth-child(2) { animation-delay: -0.75s; }
+  .px-loader i:nth-child(4) { animation-delay: -0.5s; }
+  .px-loader i:nth-child(3) { animation-delay: -0.25s; }
+  @keyframes px-step { 0%, 24% { opacity: 1; } 25%, 100% { opacity: 0.25; } }
+  @media (prefers-reduced-motion: reduce) { .px-loader i { animation: none; opacity: 0.8; } }
+  .progress-body { flex: 1; min-width: 180px; display: grid; gap: 6px; }
+  .progress-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .elapsed { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .step-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .step-pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); }
+  .step-pill.active { border-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-soft); }
+  .step-pill.done { color: var(--ok); border-color: var(--border); }
+  .ref-box { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: var(--radius-ctl); background: var(--subtle); }
+  .btn-like { display: inline-flex; align-items: center; min-height: 32px; padding: 4px 10px; border-radius: var(--radius-ctl); border: 1px solid var(--border); background: var(--panel); color: var(--ink); font-size: 12px; font-weight: 500; }
+  .btn-like:hover { border-color: var(--accent); color: var(--accent); }
+  .ref-preview { display: flex; align-items: center; gap: 10px; }
+  .ref-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); }
+  .engine-tip { margin: 0; padding: 8px 10px; border-radius: var(--radius-ctl); background: var(--subtle); border: 1px solid var(--border); font-size: 12px; color: var(--muted); }
   .preview-wrap { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start; }
   @media (max-width: 720px) { .preview-wrap { grid-template-columns: 1fr; } }
   .dolls { display: flex; gap: 12px; align-items: flex-end; justify-content: center; padding: 14px; background: var(--subtle); border: 1px solid var(--border); border-radius: var(--radius-ctl); }
@@ -111,8 +130,23 @@
       <textarea id="prompt" maxlength="500" placeholder="描述发型发色、瞳色、服饰外套、配饰、鞋履以及期望配色（例如：黑发红瞳少年穿着暗红风衣配黑色工装靴）"></textarea>
     </label>
 
+    <div class="ref-box">
+      <div class="row" style="justify-content:space-between">
+        <div class="row">
+          <label for="ref-file" style="cursor:pointer;display:inline-flex;align-items:center"><span class="btn-like">上传角色参考图（可选）</span></label>
+          <input id="ref-file" type="file" accept="image/png,image/jpeg" hidden />
+          <span class="sub">上传立绘或服装参考图（PNG / JPG），支持多模态配方解析与图生皮肤</span>
+        </div>
+        <button id="clear-ref-btn" type="button" hidden>清除参考图</button>
+      </div>
+      <div id="ref-preview" class="ref-preview" hidden>
+        <img id="ref-img" class="ref-thumb" alt="参考图缩略图" />
+        <span id="ref-name" class="sub"></span>
+      </div>
+    </div>
+
     <div id="refine-banner" hidden class="progress">
-      <span style="flex:1;font-size:13px">正在基于上一次生成的结构配方进行局部微调（留空重置为全新生成）</span>
+      <span id="refine-text" style="flex:1;font-size:13px">正在基于选定结果进行局部微调（退出微调可恢复全新生成）</span>
       <button id="clear-refine" type="button">退出微调</button>
     </div>
 
@@ -136,15 +170,26 @@
         </select>
       </label>
     </div>
+    <p id="engine-tip" class="engine-tip" hidden></p>
 
     <div class="row">
       <button id="gen-btn" class="primary" type="button">生成皮肤</button>
       <span id="status-msg" class="msg"></span>
     </div>
 
-    <div id="job-progress" hidden class="progress">
-      <span class="dot"></span>
-      <span id="job-stage" style="font-size:13px">正在准备任务…</span>
+    <div id="job-progress" hidden class="progress" aria-live="polite">
+      <span class="px-loader" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <div class="progress-body">
+        <div class="progress-top">
+          <span id="job-stage" style="font-size:13px;font-weight:500">正在准备任务…</span>
+          <span id="job-elapsed" class="elapsed">已用 0 秒</span>
+        </div>
+        <div class="step-pills">
+          <span class="step-pill active" data-step="connect">连接引擎</span>
+          <span class="step-pill" data-step="generate">生成构建</span>
+          <span class="step-pill" data-step="validate">UV 质检</span>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -155,7 +200,7 @@
         <p id="result-summary" class="sub"></p>
       </div>
       <div class="row">
-        <a id="dl-link" download="ai-skin.png"><button type="button">下载 64×64 PNG</button></a>
+        <button id="dl-btn" type="button">下载 64×64 PNG</button>
         <button id="refine-btn" type="button" hidden>在此基础上微调</button>
       </div>
     </div>
@@ -203,8 +248,11 @@
 
   let configState = null;
   let activeJob = null;
-  let baseRecipe = null;
+  let refineState = null; // { jobId, recipe, engine }
+  let refImageBase64 = '';
   let pollTimer = null;
+  let elapsedTimer = null;
+  let jobStartedAt = 0;
   let dirty = false;
 
   function postResize() {
@@ -269,7 +317,7 @@
       h.resolve({ status: msg.status, body: msg.body });
       return;
     }
-    if (msg.type === 'wishingskin:host_result' && hostMap.has(msg.id)) {
+    if (msg.type === 'wishingskin:host-response' && hostMap.has(msg.id)) {
       const h = hostMap.get(msg.id); hostMap.delete(msg.id); clearTimeout(h.t);
       if (msg.ok) h.resolve(msg.data);
       else h.reject(Object.assign(new Error(msg.error || '操作失败'), { status: msg.status }));
@@ -307,9 +355,93 @@
     el.className = 'msg' + (cls ? ' ' + cls : '');
   }
 
-  function setRefine(recipe) {
-    baseRecipe = recipe || null;
-    document.getElementById('refine-banner').hidden = !baseRecipe;
+  function setRefine(next) {
+    refineState = next && next.jobId ? next : null;
+    const banner = document.getElementById('refine-banner');
+    banner.hidden = !refineState;
+    if (refineState) {
+      document.getElementById('refine-text').textContent = refineState.recipe
+        ? '正在基于选定的结构配方进行局部微调（退出微调可恢复全新生成）'
+        : ('正在基于任务 ' + refineState.jobId + ' 进行参考重绘或局部修改（退出微调可恢复全新生成）');
+    }
+    requestAnimationFrame(postResize);
+  }
+
+  function setReferenceImage(dataUrl, fileName) {
+    refImageBase64 = dataUrl || '';
+    const prev = document.getElementById('ref-preview');
+    const clearBtn = document.getElementById('clear-ref-btn');
+    if (refImageBase64) {
+      document.getElementById('ref-img').src = refImageBase64;
+      document.getElementById('ref-name').textContent = fileName || '已选择参考图';
+      prev.hidden = false;
+      clearBtn.hidden = false;
+    } else {
+      document.getElementById('ref-img').removeAttribute('src');
+      document.getElementById('ref-name').textContent = '';
+      prev.hidden = true;
+      clearBtn.hidden = true;
+    }
+    requestAnimationFrame(postResize);
+  }
+
+  function updateEngineTip() {
+    const eng = document.getElementById('engine').value;
+    const tip = document.getElementById('engine-tip');
+    if (eng === 'image_api') {
+      tip.hidden = false;
+      tip.textContent = '提示：通用文生图大模型偶发 UV 贴图错位，适合探索纹理创意或结合「以此微调」调整；若需 100% 严丝合缝的服饰结构，建议选择「纯文本 AI 配方合成」或专用 Minecraft Skin 推理节点。';
+    } else if (eng === 'async_worker') {
+      tip.hidden = false;
+      tip.textContent = '已选择专用异步推理节点（适合本地或云端 Minecraft Skin LoRA / Diffusion 服务）。';
+    } else {
+      tip.hidden = true;
+      tip.textContent = '';
+    }
+    requestAnimationFrame(postResize);
+  }
+
+  function updateStageUI(stageText, jobStatus) {
+    document.getElementById('job-stage').textContent = stageText || '处理中…';
+    const text = String(stageText || '');
+    let activeStep = 'connect';
+    if (text.includes('UV') || text.includes('质检') || text.includes('校验') || text.includes('结算')) {
+      activeStep = 'validate';
+    } else if (jobStatus === 'running' && !text.includes('连接')) {
+      activeStep = 'generate';
+    }
+    const order = ['connect', 'generate', 'validate'];
+    const activeIdx = order.indexOf(activeStep);
+    document.querySelectorAll('#job-progress .step-pill').forEach((el) => {
+      const idx = order.indexOf(el.dataset.step);
+      el.classList.toggle('active', idx === activeIdx);
+      el.classList.toggle('done', idx >= 0 && idx < activeIdx);
+    });
+  }
+
+  function startJobProgressUI(initialStage) {
+    if (elapsedTimer) clearInterval(elapsedTimer);
+    jobStartedAt = Date.now();
+    document.getElementById('job-progress').hidden = false;
+    document.getElementById('job-elapsed').textContent = '已用 0 秒';
+    updateStageUI(initialStage || '正在提交任务…', 'queued');
+    elapsedTimer = setInterval(() => {
+      const sec = Math.max(0, Math.floor((Date.now() - jobStartedAt) / 1000));
+      document.getElementById('job-elapsed').textContent = '已用 ' + sec + ' 秒';
+    }, 1000);
+    const btn = document.getElementById('gen-btn');
+    btn.disabled = true;
+    btn.textContent = '生成中…';
+    requestAnimationFrame(postResize);
+  }
+
+  function stopJobProgressUI() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+    document.getElementById('job-progress').hidden = true;
+    const btn = document.getElementById('gen-btn');
+    btn.disabled = false;
+    btn.textContent = '生成皮肤';
     requestAnimationFrame(postResize);
   }
 
@@ -334,44 +466,44 @@
     }
   }
 
-  async function initConfig() {
-    const [cfgRes, charData] = await Promise.all([
-      callPlugin('GET', '/config'),
-      callHost('listCharacters').catch(() => ({ characters: [] }))
-    ]);
-    if (cfgRes.status === 200) {
-      configState = cfgRes.body;
-      renderQuotaBadges(configState);
+  async function loadConfig() {
+    const cfgRes = await callPlugin('GET', '/config').catch(() => null);
+    if (!cfgRes || cfgRes.status !== 200) return;
+    configState = cfgRes.body;
+    renderQuotaBadges(configState);
 
-      const engSel = document.getElementById('engine');
-      engSel.innerHTML = '';
-      for (const eng of configState.engines || []) {
-        if (!eng.configured) continue;
-        const opt = document.createElement('option');
-        opt.value = eng.id;
-        opt.textContent = eng.label;
-        engSel.appendChild(opt);
-      }
-      if (engSel.options.length === 0) {
-        const opt = document.createElement('option');
-        opt.value = '';
-        opt.textContent = '管理员尚未启用任何生成引擎';
-        engSel.appendChild(opt);
-        document.getElementById('gen-btn').disabled = true;
-      } else if (configState.defaultEngine) {
-        engSel.value = configState.defaultEngine;
-        document.getElementById('gen-btn').disabled = false;
-      }
-      document.getElementById('public-wrap').hidden = !configState.allowPublicSave;
-
-      if (configState.activeJobId && !pollTimer) {
-        document.getElementById('job-progress').hidden = false;
-        document.getElementById('job-stage').textContent = '恢复进行中的生成任务…';
-        document.getElementById('gen-btn').disabled = true;
-        startPolling(configState.activeJobId);
-      }
+    const engSel = document.getElementById('engine');
+    engSel.innerHTML = '';
+    for (const eng of configState.engines || []) {
+      if (!eng.configured) continue;
+      const opt = document.createElement('option');
+      opt.value = eng.id;
+      opt.textContent = eng.label;
+      engSel.appendChild(opt);
     }
+    if (engSel.options.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '管理员尚未启用任何生成引擎';
+      engSel.appendChild(opt);
+      document.getElementById('gen-btn').disabled = true;
+    } else {
+      if (configState.defaultEngine && [...engSel.options].some(o => o.value === configState.defaultEngine)) {
+        engSel.value = configState.defaultEngine;
+      }
+      if (!pollTimer) document.getElementById('gen-btn').disabled = false;
+    }
+    updateEngineTip();
+    document.getElementById('public-wrap').hidden = !configState.allowPublicSave;
 
+    if (configState.activeJobId && !pollTimer) {
+      startJobProgressUI('恢复进行中的生成任务…');
+      startPolling(configState.activeJobId);
+    }
+  }
+
+  async function loadCharacters() {
+    const charData = await callHost('listCharacters').catch(() => ({ characters: [] }));
     const charSel = document.getElementById('save-char');
     charSel.innerHTML = '<option value="0">仅保存至我的材质库（暂不穿戴）</option>';
     for (const c of (charData && charData.characters) || []) {
@@ -380,23 +512,21 @@
       opt.textContent = c.name + (c.model === 'slim' ? '（纤细）' : '（经典）');
       charSel.appendChild(opt);
     }
-    await loadHistory();
   }
 
   function showJobResult(job, markUnsaved = true) {
     activeJob = job;
     document.getElementById('result-card').hidden = false;
     document.getElementById('result-summary').textContent = (job.summary || '皮肤已通过 64×64 UV 规范质检') + (job.durationMs ? '（耗时 ' + job.durationMs + ' ms）' : '');
-    if (job.frontPreviewBase64) {
-      document.getElementById('prev-front').src = 'data:image/png;base64,' + job.frontPreviewBase64;
-    }
-    if (job.backPreviewBase64) {
-      document.getElementById('prev-back').src = 'data:image/png;base64,' + job.backPreviewBase64;
-    }
+    const frontEl = document.getElementById('prev-front');
+    const backEl = document.getElementById('prev-back');
+    if (job.frontPreviewBase64) frontEl.src = 'data:image/png;base64,' + job.frontPreviewBase64;
+    else frontEl.removeAttribute('src');
+    if (job.backPreviewBase64) backEl.src = 'data:image/png;base64,' + job.backPreviewBase64;
+    else backEl.removeAttribute('src');
     document.getElementById('prev-raw').src = 'data:image/png;base64,' + job.pngBase64;
-    document.getElementById('dl-link').href = 'data:image/png;base64,' + job.pngBase64;
     document.getElementById('save-name').value = (job.prompt || 'AI 皮肤').slice(0, 28);
-    document.getElementById('refine-btn').hidden = !job.recipe;
+    document.getElementById('refine-btn').hidden = !job.jobId;
     document.getElementById('save-msg').textContent = '';
 
     callHost('setPreview', {
@@ -459,25 +589,35 @@
         });
         actions.appendChild(loadBtn);
 
-        if (item.recipe) {
-          const refBtn = document.createElement('button');
-          refBtn.type = 'button';
-          refBtn.textContent = '以此微调';
-          refBtn.addEventListener('click', () => {
-            document.getElementById('prompt').value = item.prompt || '';
-            document.getElementById('model').value = item.model === 'slim' ? 'slim' : 'default';
-            setRefine(item.recipe);
-            showJobResult(item, false);
-            document.getElementById('prompt').focus();
-          });
-          actions.appendChild(refBtn);
-        }
+        const refBtn = document.createElement('button');
+        refBtn.type = 'button';
+        refBtn.textContent = '以此微调';
+        refBtn.addEventListener('click', () => {
+          document.getElementById('prompt').value = item.prompt || '';
+          document.getElementById('model').value = item.model === 'slim' ? 'slim' : 'default';
+          const engSel = document.getElementById('engine');
+          if (item.engine && [...engSel.options].some(o => o.value === item.engine)) {
+            engSel.value = item.engine;
+            updateEngineTip();
+          }
+          setRefine({ jobId: item.jobId, recipe: item.recipe || null, engine: item.engine || '' });
+          showJobResult(item, false);
+          document.getElementById('prompt').focus();
+          setStatus('请在上方输入修改需求（例如“把头发改成紫色并加上红色围巾”），再点击生成。', '');
+        });
+        actions.appendChild(refBtn);
 
-        const dl = document.createElement('a');
-        dl.href = 'data:image/png;base64,' + item.pngBase64;
-        dl.download = (item.jobId || 'ai-skin') + '.png';
-        dl.textContent = '下载 PNG';
-        actions.appendChild(dl);
+        const dlBtn = document.createElement('button');
+        dlBtn.type = 'button';
+        dlBtn.textContent = '下载 PNG';
+        dlBtn.addEventListener('click', () => {
+          callHost('downloadFile', {
+            filename: (item.jobId || 'ai-skin') + '.png',
+            mimeType: 'image/png',
+            dataBase64: item.pngBase64
+          }).catch(() => {});
+        });
+        actions.appendChild(dlBtn);
 
         const delBtn = document.createElement('button');
         delBtn.type = 'button';
@@ -488,6 +628,7 @@
           try {
             const dr = await callPlugin('POST', '/history/delete', { jobId: item.jobId });
             if (dr.status === 200) {
+              if (refineState && refineState.jobId === item.jobId) setRefine(null);
               await loadHistory();
             }
           } finally {
@@ -511,41 +652,79 @@
       try {
         const res = await callPlugin('GET', '/jobs', undefined, 'id=' + encodeURIComponent(jobId));
         if (res.status !== 200) {
-          clearInterval(pollTimer); pollTimer = null;
-          document.getElementById('job-progress').hidden = true;
-          document.getElementById('gen-btn').disabled = false;
+          stopJobProgressUI();
           setStatus((res.body && res.body.error) || '查询任务失败', 'err');
           return;
         }
         const job = res.body;
-        document.getElementById('job-stage').textContent = job.stage || '处理中…';
+        updateStageUI(job.stage || '处理中…', job.status);
         if (job.status === 'succeeded') {
-          clearInterval(pollTimer); pollTimer = null;
-          document.getElementById('job-progress').hidden = true;
-          document.getElementById('gen-btn').disabled = false;
+          stopJobProgressUI();
           showJobResult(job, true);
           setStatus('生成完成！可先查看 3D 预览，满意后再保存至衣柜。', 'ok');
-          const [cfgRes] = await Promise.all([callPlugin('GET', '/config'), loadHistory()]);
-          if (cfgRes.status === 200) {
-            configState = cfgRes.body;
-            renderQuotaBadges(configState);
-          }
+          await Promise.all([loadConfig(), loadHistory()]);
         } else if (job.status === 'failed') {
-          clearInterval(pollTimer); pollTimer = null;
-          document.getElementById('job-progress').hidden = true;
-          document.getElementById('gen-btn').disabled = false;
+          stopJobProgressUI();
           setStatus(job.error || '生成失败（未扣费）', 'err');
         }
       } catch (err) {
-        clearInterval(pollTimer); pollTimer = null;
-        document.getElementById('job-progress').hidden = true;
-        document.getElementById('gen-btn').disabled = false;
+        stopJobProgressUI();
         setStatus(err.message || '轮询状态失败', 'err');
       }
     };
-    poll();
-    pollTimer = setInterval(poll, 1200);
+    void poll();
+    pollTimer = setInterval(() => void poll(), 1200);
   }
+
+  function resizeRefFileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('读取参考图失败'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('无法解析所选图片格式'));
+        img.onload = () => {
+          const maxSide = 768;
+          let w = img.naturalWidth || img.width;
+          let h = img.naturalHeight || img.height;
+          if (w > maxSide || h > maxSide) {
+            const ratio = Math.min(maxSide / w, maxSide / h);
+            w = Math.max(1, Math.round(w * ratio));
+            h = Math.max(1, Math.round(h * ratio));
+          }
+          const c = document.createElement('canvas');
+          c.width = w;
+          c.height = h;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          let out = c.toDataURL('image/png');
+          if (out.length > 1500000) {
+            out = c.toDataURL('image/jpeg', 0.9);
+          }
+          resolve(out);
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  document.getElementById('ref-file').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const dataUrl = await resizeRefFileToDataUrl(file);
+      setReferenceImage(dataUrl, file.name);
+      setStatus('', '');
+    } catch (err) {
+      setStatus((err && err.message) || '参考图处理失败', 'err');
+    } finally {
+      e.target.value = '';
+    }
+  });
+
+  document.getElementById('clear-ref-btn').addEventListener('click', () => setReferenceImage('', ''));
+  document.getElementById('engine').addEventListener('change', updateEngineTip);
 
   document.getElementById('presets').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-prompt]');
@@ -556,10 +735,25 @@
 
   document.getElementById('clear-refine').addEventListener('click', () => setRefine(null));
   document.getElementById('refine-btn').addEventListener('click', () => {
-    if (!activeJob || !activeJob.recipe) return;
-    setRefine(activeJob.recipe);
+    if (!activeJob || !activeJob.jobId) return;
+    const engSel = document.getElementById('engine');
+    if (activeJob.engine && [...engSel.options].some(o => o.value === activeJob.engine)) {
+      engSel.value = activeJob.engine;
+      updateEngineTip();
+    }
+    setRefine({ jobId: activeJob.jobId, recipe: activeJob.recipe || null, engine: activeJob.engine || '' });
     document.getElementById('prompt').focus();
     setStatus('请在上方输入修改需求（例如“把头发改成紫色并加上红色围巾”），再点击生成。', '');
+  });
+
+  document.getElementById('dl-btn').addEventListener('click', () => {
+    if (!activeJob || !activeJob.pngBase64) return;
+    const rawName = document.getElementById('save-name').value.trim() || 'ai-skin';
+    callHost('downloadFile', {
+      filename: rawName + '.png',
+      mimeType: 'image/png',
+      dataBase64: activeJob.pngBase64
+    }).catch(() => {});
   });
 
   document.getElementById('gen-btn').addEventListener('click', async () => {
@@ -568,29 +762,33 @@
     if (!prompt) { setStatus('请先输入角色外观描述', 'err'); return; }
     if (!engine) { setStatus('没有可用的 AI 生成引擎', 'err'); return; }
 
-    document.getElementById('gen-btn').disabled = true;
     setStatus('', '');
-    document.getElementById('job-progress').hidden = false;
-    document.getElementById('job-stage').textContent = '正在提交任务…';
+    startJobProgressUI('正在提交任务…');
 
     try {
-      const res = await callPlugin('POST', '/generate', {
+      const payload = {
         prompt,
         engine,
         model: document.getElementById('model').value,
-        style: document.getElementById('style').value,
-        baseRecipe
-      });
+        style: document.getElementById('style').value
+      };
+      if (refineState && refineState.jobId) {
+        payload.baseJobId = refineState.jobId;
+        if (refineState.recipe) payload.baseRecipe = refineState.recipe;
+      }
+      if (refImageBase64) {
+        payload.referenceImageBase64 = refImageBase64;
+      }
+      const res = await callPlugin('POST', '/generate', payload);
       if (res.status !== 202) {
-        document.getElementById('job-progress').hidden = true;
-        document.getElementById('gen-btn').disabled = false;
+        stopJobProgressUI();
         setStatus((res.body && res.body.error) || '提交生成失败', 'err');
         return;
       }
+      updateStageUI(res.body.stage || '任务已入队…', res.body.status || 'queued');
       startPolling(res.body.jobId);
     } catch (err) {
-      document.getElementById('job-progress').hidden = true;
-      document.getElementById('gen-btn').disabled = false;
+      stopJobProgressUI();
       setStatus(err.message || '请求失败', 'err');
     }
   });
@@ -604,12 +802,13 @@
     msgEl.className = 'msg'; msgEl.textContent = '';
 
     try {
+      const charId = Number(document.getElementById('save-char').value) || 0;
       const res = await callPlugin('POST', '/save', {
         jobId: activeJob.jobId,
         name: document.getElementById('save-name').value.trim(),
         model: document.getElementById('model').value,
         isPublic: !document.getElementById('public-wrap').hidden && document.getElementById('save-public').checked,
-        characterId: Number(document.getElementById('save-char').value) || 0
+        characterId: charId
       });
       if (res.status !== 200) {
         msgEl.className = 'msg err';
@@ -622,6 +821,7 @@
         ? '已提交保存，正在等待站点审核通过后生效。'
         : (res.body.bound ? '已保存到衣柜并穿戴到所选角色！' : '已保存到我的材质库！');
       callHost('notify', { message: msgEl.textContent, kind: 'success' }).catch(() => {});
+      callHost('notifyMutated', { textures: true, characters: charId > 0 && !res.body.pendingReview }).catch(() => {});
     } catch (err) {
       msgEl.className = 'msg err';
       msgEl.textContent = err.message || '保存失败';
@@ -632,7 +832,12 @@
 
   document.getElementById('hist-refresh-btn').addEventListener('click', () => void loadHistory());
 
-  void initConfig();
+  function init() {
+    void loadConfig();
+    void loadCharacters();
+    void loadHistory();
+  }
+  init();
 })();
 </script>
 </body>

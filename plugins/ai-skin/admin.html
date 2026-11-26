@@ -41,6 +41,7 @@
     --danger-bg: rgba(248, 113, 113, 0.14);
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; padding: 4px; background: transparent; color: var(--ink); font: 14px/1.55 var(--font-sans); }
   .stack { display: grid; gap: 14px; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); display: grid; gap: 12px; }
@@ -66,6 +67,14 @@
   button:disabled { opacity: 0.55; cursor: not-allowed; }
   .preview-box { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--subtle); }
   .preview-box img { width: 48px; height: 96px; image-rendering: pixelated; border-radius: 6px; background: var(--panel); border: 1px solid var(--border); }
+  .px-loader { display: grid; grid-template-columns: repeat(2, 7px); gap: 2px; flex-shrink: 0; }
+  .px-loader i { display: block; width: 7px; height: 7px; border-radius: 1px; background: var(--accent); animation: px-step 1s steps(4, end) infinite; }
+  .px-loader i:nth-child(2) { animation-delay: -0.75s; }
+  .px-loader i:nth-child(4) { animation-delay: -0.5s; }
+  .px-loader i:nth-child(3) { animation-delay: -0.25s; }
+  @keyframes px-step { 0%, 24% { opacity: 1; } 25%, 100% { opacity: 0.25; } }
+  @media (prefers-reduced-motion: reduce) { .px-loader i { animation: none; opacity: 0.8; } }
+  .elapsed { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
   th { color: var(--muted); font-weight: 600; font-size: 12px; }
@@ -95,6 +104,11 @@
       </select>
       <button id="test-btn" class="primary" type="submit">执行测试</button>
     </form>
+    <div id="test-progress" hidden class="preview-box" aria-live="polite">
+      <span class="px-loader" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span id="test-stage" style="font-size:13px">正在准备测试任务…</span>
+      <span id="test-elapsed" class="elapsed">已用 0 秒</span>
+    </div>
     <div id="test-result" hidden class="preview-box"></div>
   </section>
 
@@ -184,12 +198,12 @@
     }
   });
 
-  function callPlugin(method, path, body, timeoutMs = 15000) {
+  function callPlugin(method, path, body, query, timeoutMs = 15000) {
     const id = 'aia-' + (++seq);
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => { reqMap.delete(id); reject(new Error('请求超时')); }, timeoutMs);
       reqMap.set(id, { resolve, reject, t });
-      window.parent.postMessage({ type: 'wishingskin:request', id, method, path, body }, '*');
+      window.parent.postMessage({ type: 'wishingskin:request', id, method, path, query, body }, '*');
     });
   }
 
@@ -283,43 +297,113 @@
 
   document.getElementById('refresh-btn').addEventListener('click', () => void refresh());
 
+  let testTimer = null;
+  let elapsedTimer = null;
+
+  function stopTestTimers() {
+    if (testTimer) { clearInterval(testTimer); testTimer = null; }
+    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+  }
+
+  function renderTestResult(ok, durMs, summaryOrErr, frontBase64) {
+    const outBox = document.getElementById('test-result');
+    outBox.hidden = false;
+    outBox.innerHTML = '';
+    if (!ok) {
+      outBox.textContent = '测试失败（' + (durMs || 0) + ' ms）：' + (summaryOrErr || '未知错误');
+      return;
+    }
+    const img = document.createElement('img');
+    img.src = 'data:image/png;base64,' + frontBase64;
+    img.alt = '测试立绘';
+    const meta = document.createElement('div');
+    meta.innerHTML = '<strong>测试通过（' + durMs + ' ms）</strong>';
+    const p = document.createElement('p'); p.className = 'muted'; p.textContent = summaryOrErr || 'UV 校验已通过';
+    meta.appendChild(p);
+    outBox.append(img, meta);
+  }
+
   document.getElementById('test-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const eng = document.getElementById('t-engine').value;
     const outBox = document.getElementById('test-result');
+    const progBox = document.getElementById('test-progress');
+    const stageEl = document.getElementById('test-stage');
+    const elapsedEl = document.getElementById('test-elapsed');
     if (!eng) {
       outBox.hidden = false;
       outBox.textContent = '请先配置并保存至少一种引擎（或启用内置演示模式）。';
       return;
     }
+    stopTestTimers();
     const btn = document.getElementById('test-btn');
     btn.disabled = true; btn.textContent = '测试中…';
-    outBox.hidden = false; outBox.textContent = '正在请求引擎并验证 64×64 UV…';
+    outBox.hidden = true;
+    progBox.hidden = false;
+    stageEl.textContent = '正在启动管理员干跑测试…';
+    const startedAt = Date.now();
+    elapsedEl.textContent = '已用 0 秒';
+    elapsedTimer = setInterval(() => {
+      elapsedEl.textContent = '已用 ' + Math.floor((Date.now() - startedAt) / 1000) + ' 秒';
+    }, 1000);
+
+    const doneCleanup = () => {
+      stopTestTimers();
+      progBox.hidden = true;
+      btn.disabled = false;
+      btn.textContent = '执行测试';
+      requestAnimationFrame(postResize);
+    };
+
     try {
       const res = await callPlugin('POST', '/admin/test', {
         engine: eng,
         prompt: document.getElementById('t-prompt').value.trim(),
-        model: document.getElementById('t-model').value
-      }, 190000);
-      outBox.innerHTML = '';
+        model: document.getElementById('t-model').value,
+        async: true
+      });
+      if (res.status === 202 && res.body && res.body.jobId) {
+        const jobId = res.body.jobId;
+        const poll = async () => {
+          try {
+            const jr = await callPlugin('GET', '/jobs', undefined, 'id=' + encodeURIComponent(jobId));
+            if (jr.status !== 200 || !jr.body) {
+              doneCleanup();
+              renderTestResult(false, Date.now() - startedAt, (jr.body && jr.body.error) || '查询测试任务失败');
+              return;
+            }
+            const job = jr.body;
+            stageEl.textContent = job.stage || '正在验证模型响应…';
+            if (job.status === 'succeeded') {
+              doneCleanup();
+              renderTestResult(true, job.durationMs || (Date.now() - startedAt), job.summary, job.frontPreviewBase64);
+              await refresh();
+            } else if (job.status === 'failed') {
+              doneCleanup();
+              renderTestResult(false, job.durationMs || (Date.now() - startedAt), job.error);
+              await refresh();
+            }
+          } catch (err) {
+            doneCleanup();
+            renderTestResult(false, Date.now() - startedAt, err.message || '轮询失败');
+          }
+        };
+        await poll();
+        if (btn.disabled) {
+          testTimer = setInterval(() => void poll(), 1200);
+        }
+        return;
+      }
+      doneCleanup();
       if (res.status !== 200 || !res.body || !res.body.ok) {
-        outBox.textContent = '测试失败（' + ((res.body && res.body.durationMs) || 0) + ' ms）：' + ((res.body && (res.body.error || res.body.message)) || '未知错误');
+        renderTestResult(false, (res.body && res.body.durationMs) || (Date.now() - startedAt), (res.body && (res.body.error || res.body.message)) || '未知错误');
       } else {
-        const img = document.createElement('img');
-        img.src = 'data:image/png;base64,' + res.body.frontPreviewBase64;
-        img.alt = '测试立绘';
-        const meta = document.createElement('div');
-        meta.innerHTML = '<strong>测试通过（' + res.body.durationMs + ' ms）</strong>';
-        const p = document.createElement('p'); p.className = 'muted'; p.textContent = res.body.summary || 'UV 校验已通过';
-        meta.appendChild(p);
-        outBox.append(img, meta);
+        renderTestResult(true, res.body.durationMs, res.body.summary, res.body.frontPreviewBase64);
       }
       await refresh();
     } catch (err) {
-      outBox.textContent = err.message || '请求失败';
-    } finally {
-      btn.disabled = false; btn.textContent = '执行测试';
-      requestAnimationFrame(postResize);
+      doneCleanup();
+      renderTestResult(false, Date.now() - startedAt, err.message || '请求失败');
     }
   });
 

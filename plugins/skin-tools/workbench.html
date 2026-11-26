@@ -37,6 +37,7 @@
     --danger: #f87171;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; padding: 4px; background: transparent; color: var(--ink); font: 14px/1.55 var(--font-sans); }
   .layout { display: grid; gap: 14px; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); display: grid; gap: 12px; }
@@ -146,7 +147,7 @@
         </label>
         <div class="row">
           <button id="save-btn" class="primary" type="submit" disabled>保存为新材质</button>
-          <a id="dl-link" download="converted-skin.png" hidden><button type="button">下载 PNG</button></a>
+          <button id="dl-btn" type="button" hidden>下载 PNG</button>
           <span id="save-msg" class="msg"></span>
         </div>
       </form>
@@ -164,6 +165,7 @@
   let lastResult = null;
   let debounceTimer = null;
   let dirty = false;
+  let transformSeq = 0;
 
   function postResize() {
     window.parent.postMessage({
@@ -197,12 +199,12 @@
       if (!el) { el = document.createElement('style'); el.id = 'ws-host-fonts'; document.head.appendChild(el); }
       el.textContent = ctx.fontFaceCss;
     }
-    if (!baseSkin && ctx.textureHash) {
-      setSourceSkin({
-        fileHash: ctx.textureHash,
-        name: ctx.textureName || '当前皮肤',
-        model: ctx.textureModel === 'slim' ? 'slim' : 'default'
-      });
+    const tex = ctx.texture && typeof ctx.texture === 'object' ? ctx.texture : null;
+    const ctxHash = (tex && tex.fileHash) || ctx.textureHash || '';
+    const ctxName = (tex && tex.name) || ctx.textureName || '当前皮肤';
+    const ctxModel = (tex && tex.model) || ctx.textureModel || 'default';
+    if (!baseSkin && ctxHash) {
+      void loadSourceFromHash(ctxHash, ctxName, ctxModel === 'slim' ? 'slim' : 'default');
     }
     requestAnimationFrame(postResize);
   }
@@ -216,7 +218,7 @@
       h.resolve({ status: msg.status, body: msg.body });
       return;
     }
-    if (msg.type === 'wishingskin:host_result' && hostMap.has(msg.id)) {
+    if (msg.type === 'wishingskin:host-response' && hostMap.has(msg.id)) {
       const h = hostMap.get(msg.id); hostMap.delete(msg.id); clearTimeout(h.t);
       if (msg.ok) h.resolve(msg.data);
       else h.reject(Object.assign(new Error(msg.error || '操作失败'), { status: msg.status }));
@@ -246,6 +248,21 @@
     if (dirty === val) return;
     dirty = val;
     callHost('setDirty', { dirty: val }).catch(() => {});
+  }
+
+  async function loadSourceFromHash(fileHash, name, model) {
+    setSourceSkin({ fileHash, name, model });
+    try {
+      const res = await callHost('getTextureDataUrl', { hash: fileHash });
+      if (res && res.dataUrl && baseSkin && baseSkin.fileHash === fileHash) {
+        baseSkin.dataUrl = res.dataUrl;
+        const thumb = document.getElementById('source-thumb');
+        thumb.src = res.dataUrl;
+        thumb.hidden = false;
+      }
+    } catch {
+      // Keep source metadata without thumbnail if host fetch fails
+    }
   }
 
   function setSourceSkin(skin) {
@@ -283,6 +300,7 @@
 
   async function runTransform(markChanged) {
     if (!baseSkin) return;
+    const mySeq = ++transformSeq;
     const msg = document.getElementById('tool-msg');
     msg.textContent = '';
 
@@ -300,6 +318,7 @@
         stripOuter: document.getElementById('opt-strip-outer').checked,
         cleanAlpha: document.getElementById('opt-clean-alpha').checked
       });
+      if (mySeq !== transformSeq) return;
       if (res.status !== 200) {
         msg.className = 'msg err';
         msg.textContent = (res.body && res.body.error) || '处理失败';
@@ -313,9 +332,7 @@
       document.getElementById('prev-back').src = 'data:image/png;base64,' + lastResult.backPreviewBase64;
       document.getElementById('out-meta').textContent = '输出分辨率 ' + lastResult.width + '×' + lastResult.height + '  手臂模型：' + (lastResult.model === 'slim' ? 'Alex 3px' : 'Steve 4px');
 
-      const dl = document.getElementById('dl-link');
-      dl.href = 'data:image/png;base64,' + lastResult.pngBase64;
-      dl.hidden = false;
+      document.getElementById('dl-btn').hidden = false;
 
       callHost('setPreview', {
         pngBase64: lastResult.pngBase64,
@@ -325,11 +342,22 @@
 
       if (markChanged || hasNonZeroTransforms()) setDirty(true);
     } catch (err) {
+      if (mySeq !== transformSeq) return;
       msg.className = 'msg err';
       msg.textContent = err.message || '处理异常';
     }
     requestAnimationFrame(postResize);
   }
+
+  document.getElementById('dl-btn').addEventListener('click', () => {
+    if (!lastResult || !lastResult.pngBase64) return;
+    const rawName = document.getElementById('save-name').value.trim() || 'converted-skin';
+    callHost('downloadFile', {
+      filename: rawName + '.png',
+      mimeType: 'image/png',
+      dataBase64: lastResult.pngBase64
+    }).catch(() => {});
+  });
 
   document.getElementById('pick-site-btn').addEventListener('click', async () => {
     try {
@@ -399,7 +427,7 @@
       });
       const recId = saved && (saved.id || (saved.record && saved.record.id));
       const charId = Number(document.getElementById('save-char').value) || 0;
-      const pending = !!(saved && (saved.pendingReview || (saved.record && saved.record.reviewState === 'pending')));
+      const pending = !!(saved && (saved.reviewState === 'pending' || saved.pendingReview || (saved.record && saved.record.reviewState === 'pending')));
       if (charId > 0 && recId && !pending) {
         await callHost('applyTexture', {
           characterId: charId,
@@ -416,6 +444,7 @@
       msg.className = 'msg ok';
       setDirty(false);
       callHost('notify', { message: msg.textContent, kind: 'success' }).catch(() => {});
+      callHost('notifyMutated', { textures: true, characters: charId > 0 && !pending }).catch(() => {});
     } catch (err) {
       msg.className = 'msg err';
       msg.textContent = (err && err.message) || '保存失败';

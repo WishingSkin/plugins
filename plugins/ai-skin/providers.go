@@ -25,10 +25,12 @@ const maxUpstreamImageBytes = 12 << 20
 const maxUpstreamJSONBytes = 2 << 20
 
 type aiGenerateInput struct {
-	Prompt     string
-	Style      string
-	Model      string
-	BaseRecipe *SkinRecipe
+	Prompt         string
+	Style          string
+	Model          string
+	BaseRecipe     *SkinRecipe
+	BaseSkin       *image.NRGBA
+	ReferenceImage []byte
 }
 
 type aiGenerateOutput struct {
@@ -151,12 +153,18 @@ func generateStructuredLLM(ctx context.Context, cfg aiConfig, in aiGenerateInput
 "topPrimary" ("#RRGGBB"),
 "topSecondary" ("#RRGGBB"),
 "topAccent" ("#RRGGBB"),
+"bottomStyle" (one of: "pants","shorts","skirt","armor_greaves"),
+"sleeveStyle" (one of: "long","short","rolled","sleeveless"),
 "bottomPrimary" ("#RRGGBB"),
 "bottomAccent" ("#RRGGBB"),
 "shoeColor" ("#RRGGBB"),
 "accessory" (one of: "none","glasses","headphones","crown","cat_ears","scarf","beanie","goggles"),
 "accessoryColor" ("#RRGGBB"),
-"shading" (number between 0.08 and 0.28).`
+"hairLayers" (integer 1..3),
+"hairSheen" (number 0.2..0.9),
+"blushIntensity" (number 0..0.75),
+"detailAccent" (boolean),
+"shading" (number between 0.10 and 0.30).`
 
 	userParts := []string{
 		"Character prompt: " + in.Prompt,
@@ -165,17 +173,33 @@ func generateStructuredLLM(ctx context.Context, cfg aiConfig, in aiGenerateInput
 	if in.Style != "" {
 		userParts = append(userParts, "Art style hint: "+in.Style)
 	}
+	if len(in.ReferenceImage) > 0 {
+		userParts = append(userParts, "Analyze the attached reference character image (hair colors/style, eyes, outfit palette/silhouettes, accessories) while blending the text prompt accurately into the SkinRecipe JSON.")
+	}
 	if in.BaseRecipe != nil {
 		encodedBase, _ := json.Marshal(in.BaseRecipe)
 		userParts = append(userParts, "Refine the existing recipe (keep attributes not changed by the user's new instruction): "+string(encodedBase))
 	}
 
+	userMsgContent := any(strings.Join(userParts, "\n"))
+	if len(in.ReferenceImage) > 0 {
+		mime := http.DetectContentType(in.ReferenceImage)
+		if mime != "image/jpeg" {
+			mime = "image/png"
+		}
+		dataURI := "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(in.ReferenceImage)
+		userMsgContent = []map[string]any{
+			{"type": "text", "text": strings.Join(userParts, "\n")},
+			{"type": "image_url", "image_url": map[string]string{"url": dataURI}},
+		}
+	}
+
 	callChat := func(useJSONFormat bool) (int, []byte, error) {
 		payload := map[string]any{
 			"model": modelName,
-			"messages": []map[string]string{
+			"messages": []map[string]any{
 				{"role": "system", "content": systemPrompt},
-				{"role": "user", "content": strings.Join(userParts, "\n")},
+				{"role": "user", "content": userMsgContent},
 			},
 			"temperature": 0.65,
 		}
@@ -193,6 +217,9 @@ func generateStructuredLLM(ctx context.Context, cfg aiConfig, in aiGenerateInput
 		}
 		resp, err := client.Do(req)
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return 0, nil, errors.New("文本模型请求超时，可在插件设置调高 timeout_seconds 后重试（未扣费）")
+			}
 			return 0, nil, fmt.Errorf("文本模型请求失败: %w", err)
 		}
 		defer resp.Body.Close()
@@ -211,6 +238,12 @@ func generateStructuredLLM(ctx context.Context, cfg aiConfig, in aiGenerateInput
 		status, bodyBytes, err = callChat(false)
 		if err != nil {
 			return aiGenerateOutput{}, err
+		}
+	}
+	if len(in.ReferenceImage) > 0 && status == http.StatusBadRequest {
+		low := strings.ToLower(string(bodyBytes))
+		if strings.Contains(low, "image") || strings.Contains(low, "vision") || strings.Contains(low, "multimodal") || strings.Contains(low, "content") {
+			return aiGenerateOutput{}, errors.New("当前配置的文本模型不支持图片输入，请在后台切换为支持视觉的多模态模型（未扣费）")
 		}
 	}
 	if status < 200 || status >= 300 {
@@ -250,6 +283,12 @@ func generateStructuredLLM(ctx context.Context, cfg aiConfig, in aiGenerateInput
 
 func generateImageAPI(ctx context.Context, cfg aiConfig, in aiGenerateInput) (aiGenerateOutput, error) {
 	endpoint := normalizeEndpointURL(cfg.ImageApiURL, "/v1/images/generations", "/images/generations")
+	useEdits := strings.HasSuffix(strings.TrimRight(endpoint, "/"), "/edits") || in.BaseSkin != nil || len(in.ReferenceImage) > 0
+	if useEdits && !strings.HasSuffix(strings.TrimRight(endpoint, "/"), "/edits") {
+		if strings.HasSuffix(strings.TrimRight(endpoint, "/"), "/images/generations") {
+			endpoint = strings.TrimSuffix(strings.TrimRight(endpoint, "/"), "/generations") + "/edits"
+		}
+	}
 	client, err := newSafeAIClient(endpoint, cfg.AllowPrivateWorker, cfg.Timeout)
 	if err != nil {
 		return aiGenerateOutput{}, err
@@ -260,6 +299,11 @@ func generateImageAPI(ctx context.Context, cfg aiConfig, in aiGenerateInput) (ai
 	}
 
 	fullPrompt := fmt.Sprintf("64x64 pixel-art Minecraft skin texture UV unwrap sheet, flat front-projected UV texture atlas (head at top-left 8x8, torso below, arms and legs on standard Minecraft skin 1:1 grid), crisp unaliased pixels, %s skin model, character: %s", in.Model, in.Prompt)
+	if in.BaseSkin != nil {
+		fullPrompt = fmt.Sprintf("Refine the attached existing Minecraft skin UV texture sheet while strictly keeping every UV region aligned in exact 64x64 grid proportions (%s model). Requested changes: %s", in.Model, in.Prompt)
+	} else if len(in.ReferenceImage) > 0 {
+		fullPrompt = fmt.Sprintf("Convert the attached character reference image into a standard flat 64x64 Minecraft skin UV texture atlas (%s model), crisp pixel art matching UV layout: %s", in.Model, in.Prompt)
+	}
 	if in.Style != "" {
 		fullPrompt += ", style: " + in.Style
 	}
@@ -272,11 +316,23 @@ func generateImageAPI(ctx context.Context, cfg aiConfig, in aiGenerateInput) (ai
 		_ = mw.WriteField("prompt", fullPrompt)
 		_ = mw.WriteField("n", "1")
 		_ = mw.WriteField("size", "1024x1024")
-		part, err := mw.CreateFormFile("image", "uv-guide.png")
+		imgPayload := BuildUVGuidePNG(in.Model == "slim")
+		imgName := "uv-guide.png"
+		if in.BaseSkin != nil {
+			imgPayload = UpscaleSkinForEditPNG(in.BaseSkin)
+			imgName = "base-skin.png"
+		} else if len(in.ReferenceImage) > 0 {
+			imgPayload = in.ReferenceImage
+			imgName = "reference.png"
+			if http.DetectContentType(in.ReferenceImage) == "image/jpeg" {
+				imgName = "reference.jpg"
+			}
+		}
+		part, err := mw.CreateFormFile("image", imgName)
 		if err != nil {
 			return aiGenerateOutput{}, err
 		}
-		_, _ = part.Write(BuildUVGuidePNG(in.Model == "slim"))
+		_, _ = part.Write(imgPayload)
 		_ = mw.Close()
 
 		req, err = http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &buf)
@@ -305,11 +361,17 @@ func generateImageAPI(ctx context.Context, cfg aiConfig, in aiGenerateInput) (ai
 
 	resp, err := client.Do(req)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return aiGenerateOutput{}, errors.New("图像接口生成超时（可在插件设置调高 timeout_seconds 或改用配方合成，未扣费）")
+		}
 		return aiGenerateOutput{}, fmt.Errorf("图像接口请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxUpstreamImageBytes))
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return aiGenerateOutput{}, errors.New("读取图像响应超时（可在插件设置调高 timeout_seconds，未扣费）")
+		}
 		return aiGenerateOutput{}, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -378,6 +440,14 @@ func generateAsyncWorker(ctx context.Context, cfg aiConfig, in aiGenerateInput) 
 		"style":  in.Style,
 		"width":  64,
 		"height": 64,
+	}
+	if len(in.ReferenceImage) > 0 {
+		payload["referenceImageBase64"] = base64.StdEncoding.EncodeToString(in.ReferenceImage)
+	}
+	if in.BaseSkin != nil {
+		if b := UpscaleSkinForEditPNG(in.BaseSkin); len(b) > 0 {
+			payload["baseSkinBase64"] = base64.StdEncoding.EncodeToString(b)
+		}
 	}
 	rawBody, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.WorkerURL, bytes.NewReader(rawBody))
@@ -507,7 +577,7 @@ func generateAsyncWorker(ctx context.Context, cfg aiConfig, in aiGenerateInput) 
 		if err != nil {
 			return aiGenerateOutput{}, err
 		}
-		if cfg.WorkerSecret != "" {
+		if cfg.WorkerSecret != "" && sameOrigin(pollTarget, cfg.WorkerURL) {
 			pReq.Header.Set("Authorization", "Bearer "+cfg.WorkerSecret)
 		}
 		pResp, err := pollClient.Do(pReq)

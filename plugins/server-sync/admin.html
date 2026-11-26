@@ -41,6 +41,7 @@
     --danger-bg: rgba(248, 113, 113, 0.14);
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; padding: 4px; background: transparent; color: var(--ink); font: 14px/1.55 var(--font-sans); }
   .stack { display: grid; gap: 14px; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); display: grid; gap: 12px; }
@@ -138,6 +139,9 @@
       if (!el) { el = document.createElement('style'); el.id = 'ws-host-fonts'; document.head.appendChild(el); }
       el.textContent = ctx.fontFaceCss;
     }
+    if (typeof ctx.siteOrigin === 'string' && ctx.siteOrigin && ctx.siteOrigin !== 'null') {
+      updateCurlSample(ctx.siteOrigin);
+    }
     requestAnimationFrame(postResize);
   }
 
@@ -151,7 +155,7 @@
       h.resolve({ status: msg.status, body: msg.body });
       return;
     }
-    if (msg.type === 'wishingskin:host_result' && hostMap.has(msg.id)) {
+    if (msg.type === 'wishingskin:host-response' && hostMap.has(msg.id)) {
       const h = hostMap.get(msg.id); hostMap.delete(msg.id); clearTimeout(h.t);
       if (msg.ok) h.resolve(msg.data);
       else h.reject(new Error(msg.error || '操作失败'));
@@ -184,12 +188,23 @@
     return d;
   }
 
-  const origin = window.location.origin || 'https://你的皮肤站域名';
-  const curlText = 'curl -X POST "' + origin + '/api/plugins/wishingskin.server-sync/query" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"apiKey":"在此填写server_api_key","name":"Steve"}\'';
-  document.getElementById('curl-sample').textContent = curlText;
+  let curlText = '';
+  function updateCurlSample(siteOrigin) {
+    const cleanOrigin = (siteOrigin && siteOrigin !== 'null') ? String(siteOrigin).replace(/\/+$/, '') : 'https://你的皮肤站域名';
+    curlText = 'curl -X POST "' + cleanOrigin + '/api/plugins/wishingskin.server-sync/query" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"apiKey":"在此填写server_api_key","name":"Steve"}\'';
+    document.getElementById('curl-sample').textContent = curlText;
+  }
+  updateCurlSample('');
 
-  document.getElementById('copy-curl').addEventListener('click', () => {
-    callHost('copyText', { text: curlText }).catch(() => {});
+  document.getElementById('copy-curl').addEventListener('click', async () => {
+    try {
+      await callHost('copyText', { text: curlText });
+      callHost('notify', { message: '示例命令已复制到剪贴板', kind: 'success' }).catch(() => {});
+    } catch {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(curlText).catch(() => {});
+      }
+    }
   });
 
   async function refresh() {
