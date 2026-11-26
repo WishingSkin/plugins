@@ -460,11 +460,11 @@ func generateImageAPI(ctx context.Context, cfg aiConfig, in aiGenerateInput) (ai
 			fullPrompt = fmt.Sprintf("Convert the attached character reference image into a standard flat 64x64 Minecraft skin UV texture atlas (%s model), crisp pixel art matching UV layout: %s", in.Model, in.Prompt)
 		}
 	} else {
-		fullPrompt = fmt.Sprintf("Crisp flat orthographic 2D pixel-art Minecraft character turnaround sheet on pure solid bright green #00FF00 background. Left half: full-body strictly front view; right half: full-body strictly back view. Blocky Minecraft proportions (head:torso:legs = 8:12:12), %s hanging straight vertically down at sides, hard pixelated nearest-neighbor edges, flat even lighting, no 3D perspective, no shadows, no floor, character: %s", armSpec, in.Prompt)
+		fullPrompt = fmt.Sprintf("Crisp flat orthographic 2D pixel-art Minecraft character turnaround sheet on pure solid bright green #00FF00 background. Left half: full-body strictly front view; right half: full-body strictly back view. Exact blocky Minecraft proportions (head:torso:legs = 8:12:12), exact blocky 8x8 square cube head sitting directly on shoulders, keep hats/ears/ribbons flat inside the 8x8 head cube without tall protruding horns or tall headdresses above the head, %s hanging straight vertically down at sides, hard pixelated nearest-neighbor edges, flat even lighting, no 3D perspective, no shadows, no floor, character: %s", armSpec, in.Prompt)
 		if in.BaseSkin != nil {
-			fullPrompt = fmt.Sprintf("Edit the attached Minecraft front+back orthographic turnaround sheet while strictly keeping blocky 8:12:12 front-left and back-right silhouettes, %s, and pure solid #00FF00 background intact. Requested edits: %s", armSpec, in.Prompt)
+			fullPrompt = fmt.Sprintf("Edit the attached Minecraft front+back orthographic turnaround sheet while strictly keeping blocky 8:12:12 front-left and back-right silhouettes, exact 8x8 square cube head without tall protruding hats/ears/horns above the head, %s, and pure solid #00FF00 background intact. Requested edits: %s", armSpec, in.Prompt)
 		} else if len(in.ReferenceImage) > 0 {
-			fullPrompt = fmt.Sprintf("Convert the attached reference character into a flat orthographic 2D pixel-art Minecraft turnaround sheet (left half front view, right half back view) on pure solid #00FF00 background, blocky 8:12:12 proportions, %s, crisp unaliased pixels: %s", armSpec, in.Prompt)
+			fullPrompt = fmt.Sprintf("Convert the attached reference character into a flat orthographic 2D pixel-art Minecraft turnaround sheet (left half front view, right half back view) on pure solid #00FF00 background, exact blocky 8:12:12 proportions with flat 8x8 square head sitting directly on shoulders (no tall protruding headdress/horns above head), %s, crisp unaliased pixels: %s", armSpec, in.Prompt)
 		}
 	}
 	if in.Style != "" {

@@ -222,6 +222,39 @@ func cropTightX(band *image.NRGBA) *image.NRGBA {
 	return cropNRGBA(band, minX, 0, maxX+1, h)
 }
 
+func cropRobustX(band *image.NRGBA, minColFillRatio float64) *image.NRGBA {
+	b := band.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if w <= 0 || h <= 0 {
+		return band
+	}
+	minCount := int(math.Ceil(float64(h) * minColFillRatio))
+	if minCount < 1 {
+		minCount = 1
+	}
+	minX, maxX := w, -1
+	for x := 0; x < w; x++ {
+		cnt := 0
+		for y := 0; y < h; y++ {
+			if band.NRGBAAt(b.Min.X+x, b.Min.Y+y).A >= 128 {
+				cnt++
+			}
+		}
+		if cnt >= minCount {
+			if x < minX {
+				minX = x
+			}
+			if x > maxX {
+				maxX = x
+			}
+		}
+	}
+	if maxX < minX || maxX-minX+1 < max(4, w/4) {
+		return cropTightX(band)
+	}
+	return cropNRGBA(band, minX, 0, maxX+1, h)
+}
+
 func flipNRGBAHorizontal(src *image.NRGBA) *image.NRGBA {
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()
@@ -333,6 +366,114 @@ func absInt(v int) int {
 	return v
 }
 
+func detectOrthoVerticalBounds(charImg *image.NRGBA) (yHeadTop, yHeadEnd, yBodyEnd int) {
+	cb := charImg.Bounds()
+	cw, ch := cb.Dx(), cb.Dy()
+	yHeadEnd = max(2, min(ch-2, int(math.Round(float64(ch)*8.0/32.0))))
+	yBodyEnd = max(yHeadEnd+1, min(ch-1, int(math.Round(float64(ch)*20.0/32.0))))
+	if cw <= 0 || ch < 12 {
+		return 0, yHeadEnd, yBodyEnd
+	}
+
+	fill := make([]int, ch)
+	for y := 0; y < ch; y++ {
+		cnt := 0
+		for x := 0; x < cw; x++ {
+			if charImg.NRGBAAt(cb.Min.X+x, cb.Min.Y+y).A >= 128 {
+				cnt++
+			}
+		}
+		fill[y] = cnt
+	}
+
+	meanFill := func(y0, y1 int) float64 {
+		if y1 <= y0 {
+			return 0
+		}
+		sum := 0
+		for y := y0; y < y1; y++ {
+			sum += fill[y]
+		}
+		return float64(sum) / float64(y1-y0)
+	}
+
+	win := max(2, int(math.Round(float64(ch)*0.06)))
+	if ch >= 100 && win < 6 {
+		win = 6
+	}
+	if win*3 >= ch {
+		return 0, yHeadEnd, yBodyEnd
+	}
+
+	// Detect neck/shoulder transition where silhouette width jumps sharply from head to shoulders.
+	nStart := max(win, ch*12/100)
+	nEnd := min(ch-win-1, ch*52/100)
+	bestNeckScore := -1.0
+	for y := nStart; y < nEnd; y++ {
+		above := meanFill(y-win, y)
+		below := meanFill(y, y+win)
+		if below > above*1.22 && below >= float64(cw)*0.60 && above <= float64(cw)*0.78 {
+			denom := above
+			if denom < 1.0 {
+				denom = 1.0
+			}
+			score := (below - above) * (below / denom)
+			if score > bestNeckScore {
+				bestNeckScore = score
+				yHeadEnd = y
+			}
+		}
+	}
+
+	// Detect waist/arm-end transition where width drops sharply from torso+arms to legs, else 12:12 split.
+	rem := ch - yHeadEnd
+	yBodyEnd = yHeadEnd + int(math.Round(float64(rem)*12.0/24.0))
+	wStart := max(yHeadEnd+win, yHeadEnd+rem*30/100)
+	wEnd := min(ch-win, yHeadEnd+rem*68/100)
+	bestWaistScore := -1.0
+	for y := wStart; y < wEnd; y++ {
+		above := meanFill(y-win, y)
+		below := meanFill(y, y+win)
+		if above > below*1.16 && above >= float64(cw)*0.60 {
+			denom := below
+			if denom < 1.0 {
+				denom = 1.0
+			}
+			score := (above - below) * (above / denom)
+			if score > bestWaistScore {
+				bestWaistScore = score
+				yBodyEnd = y
+			}
+		}
+	}
+
+	// Trim tall protruding headdress/ears above the expected 8x8 square head block.
+	coreStart := min(yHeadEnd-1, max(0, yHeadEnd*45/100))
+	coreVals := make([]int, 0, max(1, yHeadEnd-coreStart))
+	for y := coreStart; y < yHeadEnd; y++ {
+		coreVals = append(coreVals, fill[y])
+	}
+	headCoreW := float64(cw) * 0.5
+	if len(coreVals) > 0 {
+		sort.Ints(coreVals)
+		headCoreW = float64(coreVals[len(coreVals)/2])
+	}
+	pxUnit := headCoreW / 8.0
+	if bodyUnit := float64(ch-yHeadEnd) / 24.0; bodyUnit > pxUnit {
+		pxUnit = bodyUnit
+	}
+	estHeadH := int(math.Round(pxUnit * 8.0))
+	if estHeadH >= 4 && yHeadEnd > int(math.Round(float64(estHeadH)*1.12)) {
+		targetH := max(max(4, estHeadH/2), int(math.Round(float64(estHeadH)*1.04)))
+		yHeadTop = max(0, yHeadEnd-targetH)
+	}
+
+	yHeadEnd = max(2, min(ch-2, yHeadEnd))
+	yBodyEnd = max(yHeadEnd+1, min(ch-1, yBodyEnd))
+	yHeadTop = max(0, min(yHeadEnd-1, yHeadTop))
+	return yHeadTop, yHeadEnd, yBodyEnd
+}
+
 // ProjectOrthoTurnaroundToSkin converts a front+back orthographic turnaround sheet into a crisp 64x64 skin.
 func ProjectOrthoTurnaroundToSkin(src *image.NRGBA, slim bool, maxColors int) (*image.NRGBA, error) {
 	if src == nil {
@@ -361,13 +502,12 @@ func ProjectOrthoTurnaroundToSkin(src *image.NRGBA, slim bool, maxColors int) (*
 
 	sliceCharacter := func(charImg *image.NRGBA, isBack bool) map[string]*image.NRGBA {
 		cb := charImg.Bounds()
-		cw, ch := cb.Dx(), cb.Dy()
-		yHeadEnd := max(1, min(ch-2, int(math.Round(float64(ch)*8.0/32.0))))
-		yBodyEnd := max(yHeadEnd+1, min(ch-1, int(math.Round(float64(ch)*20.0/32.0))))
+		cw, _ := cb.Dx(), cb.Dy()
+		yHeadTop, yHeadEnd, yBodyEnd := detectOrthoVerticalBounds(charImg)
 
-		headBand := cropTightX(cropNRGBA(charImg, 0, 0, cw, yHeadEnd))
+		headBand := cropRobustX(cropNRGBA(charImg, 0, yHeadTop, cw, yHeadEnd), 0.35)
 		bodyBand := cropTightX(cropNRGBA(charImg, 0, yHeadEnd, cw, yBodyEnd))
-		legsBand := cropTightX(cropNRGBA(charImg, 0, yBodyEnd, cw, ch))
+		legsBand := cropTightX(cropNRGBA(charImg, 0, yBodyEnd, cw, cb.Dy()))
 
 		bw, bh := bodyBand.Bounds().Dx(), bodyBand.Bounds().Dy()
 		lw, lh := legsBand.Bounds().Dx(), legsBand.Bounds().Dy()

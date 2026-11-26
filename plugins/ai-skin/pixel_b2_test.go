@@ -422,3 +422,133 @@ func TestImageAPIOrthoB2GenerateAndRefineEdits(t *testing.T) {
 		t.Fatalf("ortho_b2 refine /edits failed: job=%+v sawEditsTurnaround=%v", j2, sawEditsTurnaround.Load())
 	}
 }
+
+func TestOrthoB2TallHeaddressAndOversizedHeadAlignment(t *testing.T) {
+	sheet := image.NewNRGBA(image.Rect(0, 0, 1024, 1024))
+	fillRectNRGBA(sheet, 0, 0, 1024, 1024, color.NRGBA{0, 255, 0, 255})
+
+	blueHat := color.NRGBA{40, 90, 200, 255}
+	cyanEye := color.NRGBA{0, 230, 255, 255}
+	peachSkin := color.NRGBA{245, 205, 180, 255}
+	navyBody := color.NRGBA{24, 48, 120, 255}
+	bootDark := color.NRGBA{45, 45, 55, 255}
+
+	drawChar := func(bx int, isFront bool) {
+		y0 := 80
+		// Tall protruding headdress spire (0..140) above 8x8 square head (140..326) -> 38% head ratio.
+		fillRectNRGBA(sheet, bx+80, y0+0, 40, 60, blueHat)
+		fillRectNRGBA(sheet, bx+60, y0+60, 80, 80, blueHat)
+		// Core head cube (width 110, height 186): hair crown + face with centered cyan eyes + peach cheeks
+		fillRectNRGBA(sheet, bx+45, y0+140, 110, 70, blueHat)
+		if isFront {
+			fillRectNRGBA(sheet, bx+45, y0+210, 110, 116, peachSkin)
+			// Eyes centered vertically in core square head (y0+228..264)
+			fillRectNRGBA(sheet, bx+60, y0+228, 22, 36, cyanEye)
+			fillRectNRGBA(sheet, bx+118, y0+228, 22, 36, cyanEye)
+		} else {
+			fillRectNRGBA(sheet, bx+45, y0+210, 110, 116, blueHat)
+		}
+		// Torso + arms (width 200, height 267, y0+326..593)
+		fillRectNRGBA(sheet, bx+0, y0+326, 200, 267, navyBody)
+		// Legs (width 110, height 267, y0+593..860)
+		fillRectNRGBA(sheet, bx+45, y0+593, 110, 267, bootDark)
+	}
+	drawChar(156, true)
+	drawChar(668, false)
+
+	skin, err := ProjectOrthoTurnaroundToSkin(sheet, false, 36)
+	if err != nil {
+		t.Fatalf("ProjectOrthoTurnaroundToSkin failed: %v", err)
+	}
+	cleaned, err := SanitizeAndValidateSkin(skin, false)
+	if err != nil {
+		t.Fatalf("SanitizeAndValidateSkin failed: %v", err)
+	}
+
+	// Verify cyan eyes landed in head.front middle rows (ly in 2..6), NOT sliced to bottom edge or missing.
+	eyeHitsMid := 0
+	for ly := 2; ly <= 6; ly++ {
+		for lx := 0; lx < 8; lx++ {
+			c := cleaned.NRGBAAt(8+lx, 8+ly)
+			if c.B > 180 && c.G > 170 && c.R < 90 {
+				eyeHitsMid++
+			}
+		}
+	}
+	if eyeHitsMid < 2 {
+		t.Fatalf("expected cyan eye pixels inside head.front rows 2..6, got %d hits", eyeHitsMid)
+	}
+
+	// Verify torso.front top rows (y in 20..22) have ZERO cyan eye pixels and ZERO peach cheek pixels.
+	for ly := 0; ly < 3; ly++ {
+		for lx := 0; lx < 8; lx++ {
+			c := cleaned.NRGBAAt(20+lx, 20+ly)
+			if c.B > 180 && c.G > 170 && c.R < 90 {
+				t.Fatalf("eye pixel leaked onto torso.front at (20+%d,20+%d): %+v", lx, ly, c)
+			}
+			if c.R > 210 && c.G > 170 && c.B > 140 {
+				t.Fatalf("cheek skin pixel leaked onto torso.front at (20+%d,20+%d): %+v", lx, ly, c)
+			}
+		}
+	}
+}
+
+func TestOrthoB2WideDressWaistFallback(t *testing.T) {
+	sheet := image.NewNRGBA(image.Rect(0, 0, 1024, 1024))
+	fillRectNRGBA(sheet, 0, 0, 1024, 1024, color.NRGBA{0, 255, 0, 255})
+
+	hairColor := color.NRGBA{180, 120, 210, 255}
+	magentaEye := color.NRGBA{230, 40, 160, 255}
+	peachSkin := color.NRGBA{245, 205, 180, 255}
+	dressColor := color.NRGBA{220, 90, 130, 255}
+	shoeColor := color.NRGBA{50, 50, 60, 255}
+
+	drawChar := func(bx int, isFront bool) {
+		y0 := 80
+		// Oversized head (33% of 860 = 284px, width 120)
+		fillRectNRGBA(sheet, bx+50, y0+0, 120, 100, hairColor)
+		if isFront {
+			fillRectNRGBA(sheet, bx+50, y0+100, 120, 184, peachSkin)
+			fillRectNRGBA(sheet, bx+66, y0+135, 24, 40, magentaEye)
+			fillRectNRGBA(sheet, bx+130, y0+135, 24, 40, magentaEye)
+		} else {
+			fillRectNRGBA(sheet, bx+50, y0+100, 120, 184, hairColor)
+		}
+		// Wide uninterrupted dress across torso + upper legs (y0+284..760, width 220) -> hides waist step
+		fillRectNRGBA(sheet, bx+0, y0+284, 220, 476, dressColor)
+		// Shoes/legs only at bottom (y0+760..860)
+		fillRectNRGBA(sheet, bx+50, y0+760, 120, 100, shoeColor)
+	}
+	drawChar(146, true)
+	drawChar(658, false)
+
+	skin, err := ProjectOrthoTurnaroundToSkin(sheet, true, 36)
+	if err != nil {
+		t.Fatalf("ProjectOrthoTurnaroundToSkin failed: %v", err)
+	}
+	cleaned, err := SanitizeAndValidateSkin(skin, true)
+	if err != nil {
+		t.Fatalf("SanitizeAndValidateSkin failed: %v", err)
+	}
+
+	eyeHits := 0
+	for ly := 2; ly <= 6; ly++ {
+		for lx := 0; lx < 8; lx++ {
+			c := cleaned.NRGBAAt(8+lx, 8+ly)
+			if c.R > 190 && c.G < 90 && c.B > 120 {
+				eyeHits++
+			}
+		}
+	}
+	if eyeHits < 2 {
+		t.Fatalf("expected magenta eye pixels in head.front, got %d", eyeHits)
+	}
+	for ly := 0; ly < 3; ly++ {
+		for lx := 0; lx < 8; lx++ {
+			c := cleaned.NRGBAAt(20+lx, 20+ly)
+			if c.R > 210 && c.G > 170 && c.B > 140 {
+				t.Fatalf("cheek skin pixel leaked into torso.front under wide dress at (20+%d,20+%d): %+v", lx, ly, c)
+			}
+		}
+	}
+}

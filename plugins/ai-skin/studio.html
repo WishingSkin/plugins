@@ -202,6 +202,7 @@
       <div class="row">
         <button id="dl-btn" type="button">下载 64×64 PNG</button>
         <button id="refine-btn" type="button" hidden>在此基础上微调</button>
+        <button id="edit-in-editor-btn" type="button" hidden>送入编辑器精修</button>
       </div>
     </div>
 
@@ -254,6 +255,7 @@
   let elapsedTimer = null;
   let jobStartedAt = 0;
   let dirty = false;
+  let hasSkinEditor = false;
 
   function postResize() {
     window.parent.postMessage({
@@ -301,6 +303,11 @@
         document.head.appendChild(el);
       }
       el.textContent = ctx.fontFaceCss;
+    }
+    const tools = Array.isArray(ctx.availableTools) ? ctx.availableTools : null;
+    if (tools) {
+      hasSkinEditor = tools.some(t => t && t.pluginId === 'wishingskin.skin-editor' && t.frontendId === 'editor');
+      syncEditorHandoffButtons();
     }
     requestAnimationFrame(postResize);
   }
@@ -519,6 +526,38 @@
     }
   }
 
+  function syncEditorHandoffButtons() {
+    const resBtn = document.getElementById('edit-in-editor-btn');
+    if (resBtn) resBtn.hidden = !(hasSkinEditor && activeJob && activeJob.pngBase64);
+    document.querySelectorAll('.hist-edit-btn').forEach((btn) => {
+      btn.hidden = !hasSkinEditor;
+    });
+    requestAnimationFrame(postResize);
+  }
+
+  async function openInSkinEditor(item, preferInputName) {
+    if (!item || !item.pngBase64) return;
+    const inputName = preferInputName ? (document.getElementById('save-name').value || '').trim() : '';
+    const baseName = (inputName || item.prompt || 'AI 皮肤').trim().slice(0, 24);
+    setDirty(false);
+    try {
+      await callHost('openPluginTool', {
+        pluginId: 'wishingskin.skin-editor',
+        frontendId: 'editor',
+        context: {
+          draftSkin: {
+            pngBase64: item.pngBase64,
+            model: item.model === 'slim' ? 'slim' : 'default',
+            name: baseName + '（精修）',
+            nonce: (item.jobId || 'draft') + '-' + Date.now()
+          }
+        }
+      });
+    } catch (err) {
+      setStatus((err && err.message) || '无法打开在线皮肤编辑器', 'err');
+    }
+  }
+
   function showJobResult(job, markUnsaved = true) {
     activeJob = job;
     document.getElementById('result-card').hidden = false;
@@ -533,6 +572,7 @@
     document.getElementById('save-name').value = (job.prompt || 'AI 皮肤').slice(0, 28);
     document.getElementById('refine-btn').hidden = !job.jobId;
     document.getElementById('save-msg').textContent = '';
+    syncEditorHandoffButtons();
 
     callHost('setPreview', {
       pngBase64: job.pngBase64,
@@ -617,6 +657,14 @@
         });
         actions.appendChild(refBtn);
 
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'hist-edit-btn';
+        editBtn.hidden = !hasSkinEditor;
+        editBtn.textContent = '精修';
+        editBtn.addEventListener('click', () => { void openInSkinEditor(item, false); });
+        actions.appendChild(editBtn);
+
         const dlBtn = document.createElement('button');
         dlBtn.type = 'button';
         dlBtn.textContent = '下载 PNG';
@@ -624,7 +672,7 @@
           callHost('downloadFile', {
             filename: (item.jobId || 'ai-skin') + '.png',
             mimeType: 'image/png',
-            dataBase64: item.pngBase64
+            pngBase64: item.pngBase64
           }).catch(() => {});
         });
         actions.appendChild(dlBtn);
@@ -761,13 +809,17 @@
     setStatus('请在上方输入修改需求（例如“把头发改成紫色并加上红色围巾”），再点击生成。', '');
   });
 
+  document.getElementById('edit-in-editor-btn').addEventListener('click', () => {
+    void openInSkinEditor(activeJob, true);
+  });
+
   document.getElementById('dl-btn').addEventListener('click', () => {
     if (!activeJob || !activeJob.pngBase64) return;
     const rawName = document.getElementById('save-name').value.trim() || 'ai-skin';
     callHost('downloadFile', {
       filename: rawName + '.png',
       mimeType: 'image/png',
-      dataBase64: activeJob.pngBase64
+      pngBase64: activeJob.pngBase64
     }).catch(() => {});
   });
 
@@ -837,7 +889,9 @@
         ? '已提交保存，正在等待站点审核通过后生效。'
         : (res.body.bound ? '已保存到衣柜并穿戴到所选角色！' : '已保存到我的材质库！');
       callHost('notify', { message: msgEl.textContent, kind: 'success' }).catch(() => {});
-      callHost('notifyMutated', { textures: true, characters: charId > 0 && !res.body.pendingReview }).catch(() => {});
+      callHost('notifyMutated', {
+        kinds: charId > 0 && !res.body.pendingReview ? ['textures', 'characters'] : ['textures']
+      }).catch(() => {});
     } catch (err) {
       msgEl.className = 'msg err';
       msgEl.textContent = err.message || '保存失败';

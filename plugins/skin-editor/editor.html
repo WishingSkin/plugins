@@ -286,6 +286,7 @@
   let dirty = false;
   let previewTimer = null;
   let loadedFromHostHash = false;
+  let loadedDraftNonce = '';
   let netSignature = '';
   let netTiles = {};
   let netCanvases = {};
@@ -335,7 +336,21 @@
     const ctxHash = (tex && tex.fileHash) || ctx.textureHash || '';
     const ctxName = (tex && tex.name) || ctx.textureName || '';
     const ctxModel = (tex && tex.model) || ctx.textureModel || 'default';
-    if (!loadedFromHostHash && ctxHash) {
+    const draft = ctx.draftSkin && typeof ctx.draftSkin === 'object' ? ctx.draftSkin : null;
+    if (draft) {
+      const rawDraft = typeof draft.dataUrl === 'string' && draft.dataUrl.trim()
+        ? draft.dataUrl.trim()
+        : (typeof draft.pngBase64 === 'string' && draft.pngBase64.trim()
+            ? ('data:image/png;base64,' + draft.pngBase64.trim().replace(/^data:image\/png;base64,/i, ''))
+            : '');
+      const draftNonce = String(draft.nonce || rawDraft.slice(0, 48));
+      if (rawDraft && draftNonce && draftNonce !== loadedDraftNonce) {
+        loadedDraftNonce = draftNonce;
+        loadedFromHostHash = true;
+        loadImageDataUrl(rawDraft, draft.model === 'slim' ? 'slim' : 'default', draft.name || 'AI 皮肤精修', true);
+        setMsg('已载入 AI 生成皮肤，可直接在像素画布精修并保存。', 'ok');
+      }
+    } else if (!loadedFromHostHash && ctxHash) {
       loadedFromHostHash = true;
       void loadSkinFromHash(ctxHash, ctxName, ctxModel);
     }
@@ -1109,7 +1124,7 @@
     callHost('downloadFile', {
       filename: name,
       mimeType: 'image/png',
-      dataBase64: skinCanvas.toDataURL('image/png')
+      dataUrl: skinCanvas.toDataURL('image/png')
     }).catch(() => {});
   });
 
@@ -1143,7 +1158,9 @@
       }
       setDirty(false);
       callHost('notify', { message: document.getElementById('editor-msg').textContent, kind: 'success' }).catch(() => {});
-      callHost('notifyMutated', { textures: true, characters: charId > 0 && !pending }).catch(() => {});
+      callHost('notifyMutated', {
+        kinds: charId > 0 && !pending ? ['textures', 'characters'] : ['textures']
+      }).catch(() => {});
     } catch (err) {
       setMsg((err && err.message) || '保存失败', 'err');
     } finally {
@@ -1162,7 +1179,7 @@
         opt.textContent = t.name;
         tplSel.appendChild(opt);
       }
-      if (!loadedFromHostHash && !dirty && templatesCache.length > 0) {
+      if (!loadedFromHostHash && !loadedDraftNonce && !dirty && templatesCache.length > 0) {
         const first = templatesCache[0];
         loadImageDataUrl('data:image/png;base64,' + first.pngBase64, first.model === 'slim' ? 'slim' : 'default', '我的原创皮肤', false);
       }
