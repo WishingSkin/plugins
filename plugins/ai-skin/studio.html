@@ -248,7 +248,7 @@
 
   let configState = null;
   let activeJob = null;
-  let refineState = null; // { jobId, recipe, engine }
+  let refineState = null; // { jobId, recipe, pixelSpec, engine }
   let refImageBase64 = '';
   let pollTimer = null;
   let elapsedTimer = null;
@@ -360,9 +360,11 @@
     const banner = document.getElementById('refine-banner');
     banner.hidden = !refineState;
     if (refineState) {
-      document.getElementById('refine-text').textContent = refineState.recipe
-        ? '正在基于选定的结构配方进行局部微调（退出微调可恢复全新生成）'
-        : ('正在基于任务 ' + refineState.jobId + ' 进行参考重绘或局部修改（退出微调可恢复全新生成）');
+      document.getElementById('refine-text').textContent = refineState.pixelSpec
+        ? '正在基于上一次生成的分面像素画布进行局部微调（退出微调可恢复全新生成）'
+        : (refineState.recipe
+          ? '正在基于选定的结构配方进行局部微调（退出微调可恢复全新生成）'
+          : ('正在基于任务 ' + refineState.jobId + ' 进行参考重绘或局部修改（退出微调可恢复全新生成）'));
     }
     requestAnimationFrame(postResize);
   }
@@ -388,12 +390,15 @@
   function updateEngineTip() {
     const eng = document.getElementById('engine').value;
     const tip = document.getElementById('engine-tip');
-    if (eng === 'image_api') {
+    if (eng === 'structured_llm') {
       tip.hidden = false;
-      tip.textContent = '提示：通用文生图大模型偶发 UV 贴图错位，适合探索纹理创意或结合「以此微调」调整；若需 100% 严丝合缝的服饰结构，建议选择「纯文本 AI 配方合成」或专用 Minecraft Skin 推理节点。';
+      tip.textContent = '已启用 D2-Strict 分面像素精绘：纯文本即可直绘 64×64 双层像素皮肤（含可开关帽饰/外套/袖套），支持连续局部对话微调。';
+    } else if (eng === 'image_api') {
+      tip.hidden = false;
+      tip.textContent = '已启用 B2-v2 正交双视图投影：先生成正反立绘再自动投影与 36 色像素量化，复杂二次元或繁复花纹表现更自然，全贴图融合于基础层。';
     } else if (eng === 'async_worker') {
       tip.hidden = false;
-      tip.textContent = '已选择专用异步推理节点（适合本地或云端 Minecraft Skin LoRA / Diffusion 服务）。';
+      tip.textContent = '已选择专用异步推理节点（适合本地或云端 Minecraft Skin LoRA / Diffusion 服务，返回 ortho_b2 时也会自动投影）。';
     } else {
       tip.hidden = true;
       tip.textContent = '';
@@ -600,7 +605,12 @@
             engSel.value = item.engine;
             updateEngineTip();
           }
-          setRefine({ jobId: item.jobId, recipe: item.recipe || null, engine: item.engine || '' });
+          setRefine({
+            jobId: item.jobId,
+            recipe: item.recipe || null,
+            pixelSpec: item.pixelSpec || null,
+            engine: item.engine || ''
+          });
           showJobResult(item, false);
           document.getElementById('prompt').focus();
           setStatus('请在上方输入修改需求（例如“把头发改成紫色并加上红色围巾”），再点击生成。', '');
@@ -741,7 +751,12 @@
       engSel.value = activeJob.engine;
       updateEngineTip();
     }
-    setRefine({ jobId: activeJob.jobId, recipe: activeJob.recipe || null, engine: activeJob.engine || '' });
+    setRefine({
+      jobId: activeJob.jobId,
+      recipe: activeJob.recipe || null,
+      pixelSpec: activeJob.pixelSpec || null,
+      engine: activeJob.engine || ''
+    });
     document.getElementById('prompt').focus();
     setStatus('请在上方输入修改需求（例如“把头发改成紫色并加上红色围巾”），再点击生成。', '');
   });
@@ -774,6 +789,7 @@
       };
       if (refineState && refineState.jobId) {
         payload.baseJobId = refineState.jobId;
+        if (refineState.pixelSpec) payload.basePixelSpec = refineState.pixelSpec;
         if (refineState.recipe) payload.baseRecipe = refineState.recipe;
       }
       if (refImageBase64) {

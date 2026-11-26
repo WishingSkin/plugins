@@ -50,9 +50,11 @@ type aiConfig struct {
 	LLMApiURL          string
 	LLMApiKey          string
 	LLMModel           string
+	LLMRenderMode      string
 	ImageApiURL        string
 	ImageApiKey        string
 	ImageModel         string
+	ImageAPIMode       string
 	WorkerURL          string
 	WorkerSecret       string
 	AllowPrivateWorker bool
@@ -87,55 +89,58 @@ type aiAuditEntry struct {
 }
 
 type aiJob struct {
-	ID                 string      `json:"jobId"`
-	UserID             int64       `json:"-"`
-	Engine             string      `json:"engine"`
-	Model              string      `json:"model"`
-	Prompt             string      `json:"prompt"`
-	Status             string      `json:"status"` // queued, running, succeeded, failed
-	Stage              string      `json:"stage"`
-	Summary            string      `json:"summary,omitempty"`
-	Recipe             *SkinRecipe `json:"recipe,omitempty"`
-	PNGBase64          string      `json:"pngBase64,omitempty"`
-	FrontPreviewBase64 string      `json:"frontPreviewBase64,omitempty"`
-	BackPreviewBase64  string      `json:"backPreviewBase64,omitempty"`
-	PointsSpent        int64       `json:"pointsSpent,omitempty"`
-	Balance            string      `json:"balance,omitempty"`
-	Error              string      `json:"error,omitempty"`
-	DateKey            string      `json:"-"`
-	CreatedAt          time.Time   `json:"-"`
-	UpdatedAt          time.Time   `json:"-"`
-	DurationMs         int64       `json:"durationMs,omitempty"`
-	NeedsFlush         bool        `json:"-"`
-	Counted            bool        `json:"-"`
-	DryRun             bool        `json:"-"`
+	ID                 string         `json:"jobId"`
+	UserID             int64          `json:"-"`
+	Engine             string         `json:"engine"`
+	Model              string         `json:"model"`
+	Prompt             string         `json:"prompt"`
+	Status             string         `json:"status"` // queued, running, succeeded, failed
+	Stage              string         `json:"stage"`
+	Summary            string         `json:"summary,omitempty"`
+	Recipe             *SkinRecipe    `json:"recipe,omitempty"`
+	PixelSpec          *SkinPixelSpec `json:"pixelSpec,omitempty"`
+	PNGBase64          string         `json:"pngBase64,omitempty"`
+	FrontPreviewBase64 string         `json:"frontPreviewBase64,omitempty"`
+	BackPreviewBase64  string         `json:"backPreviewBase64,omitempty"`
+	PointsSpent        int64          `json:"pointsSpent,omitempty"`
+	Balance            string         `json:"balance,omitempty"`
+	Error              string         `json:"error,omitempty"`
+	DateKey            string         `json:"-"`
+	CreatedAt          time.Time      `json:"-"`
+	UpdatedAt          time.Time      `json:"-"`
+	DurationMs         int64          `json:"durationMs,omitempty"`
+	NeedsFlush         bool           `json:"-"`
+	Counted            bool           `json:"-"`
+	DryRun             bool           `json:"-"`
 }
 
 type aiHistoryItem struct {
-	ID        string      `json:"jobId"`
-	UserID    int64       `json:"userId"`
-	Engine    string      `json:"engine"`
-	Model     string      `json:"model"`
-	Prompt    string      `json:"prompt"`
-	Summary   string      `json:"summary,omitempty"`
-	Recipe    *SkinRecipe `json:"recipe,omitempty"`
-	PNGBase64 string      `json:"pngBase64"`
-	CreatedAt time.Time   `json:"createdAt"`
-	ExpiresAt time.Time   `json:"expiresAt"`
+	ID        string         `json:"jobId"`
+	UserID    int64          `json:"userId"`
+	Engine    string         `json:"engine"`
+	Model     string         `json:"model"`
+	Prompt    string         `json:"prompt"`
+	Summary   string         `json:"summary,omitempty"`
+	Recipe    *SkinRecipe    `json:"recipe,omitempty"`
+	PixelSpec *SkinPixelSpec `json:"pixelSpec,omitempty"`
+	PNGBase64 string         `json:"pngBase64"`
+	CreatedAt time.Time      `json:"createdAt"`
+	ExpiresAt time.Time      `json:"expiresAt"`
 }
 
 type aiHistoryView struct {
-	JobID              string      `json:"jobId"`
-	Engine             string      `json:"engine"`
-	Model              string      `json:"model"`
-	Prompt             string      `json:"prompt"`
-	Summary            string      `json:"summary,omitempty"`
-	Recipe             *SkinRecipe `json:"recipe,omitempty"`
-	PNGBase64          string      `json:"pngBase64"`
-	FrontPreviewBase64 string      `json:"frontPreviewBase64,omitempty"`
-	BackPreviewBase64  string      `json:"backPreviewBase64,omitempty"`
-	CreatedAt          string      `json:"createdAt"`
-	ExpiresAt          string      `json:"expiresAt"`
+	JobID              string         `json:"jobId"`
+	Engine             string         `json:"engine"`
+	Model              string         `json:"model"`
+	Prompt             string         `json:"prompt"`
+	Summary            string         `json:"summary,omitempty"`
+	Recipe             *SkinRecipe    `json:"recipe,omitempty"`
+	PixelSpec          *SkinPixelSpec `json:"pixelSpec,omitempty"`
+	PNGBase64          string         `json:"pngBase64"`
+	FrontPreviewBase64 string         `json:"frontPreviewBase64,omitempty"`
+	BackPreviewBase64  string         `json:"backPreviewBase64,omitempty"`
+	CreatedAt          string         `json:"createdAt"`
+	ExpiresAt          string         `json:"expiresAt"`
 }
 
 type jobManager struct {
@@ -233,9 +238,17 @@ func parseAIConfig(settings map[string]any) aiConfig {
 	cfg.LLMApiURL = str("llm_api_url")
 	cfg.LLMApiKey = str("llm_api_key")
 	cfg.LLMModel = str("llm_model")
+	cfg.LLMRenderMode = strings.ToLower(str("llm_render_mode"))
+	if cfg.LLMRenderMode != "recipe" {
+		cfg.LLMRenderMode = "pixel_grid"
+	}
 	cfg.ImageApiURL = str("image_api_url")
 	cfg.ImageApiKey = str("image_api_key")
 	cfg.ImageModel = str("image_model")
+	cfg.ImageAPIMode = strings.ToLower(str("image_api_mode"))
+	if cfg.ImageAPIMode != "direct_uv" {
+		cfg.ImageAPIMode = "ortho_b2"
+	}
 	cfg.WorkerURL = str("worker_url")
 	cfg.WorkerSecret = str("worker_secret")
 	if v, ok := settings["allow_private_worker"].(bool); ok {
@@ -272,15 +285,15 @@ func availableEngines(cfg aiConfig) ([]engineAvailability, string) {
 	list := []engineAvailability{
 		{
 			ID:         engineStructuredLLM,
-			Label:      "纯文本 AI 配方合成",
+			Label:      "纯文本 AI 像素精绘 (D2-Strict)",
 			Configured: cfg.LLMApiURL != "" && (cfg.LLMApiKey != "" || isLoopbackURL(cfg.LLMApiURL) || cfg.AllowPrivateWorker),
-			Hint:       "零显卡文本大模型配色配方 + 100% 合法 64×64 像素渲染，支持连续微调",
+			Hint:       "零显卡直绘 64×64 分面像素网格与双层外饰，支持多轮局部微调与参考图解析",
 		},
 		{
 			ID:         engineImageAPI,
-			Label:      "云端图像生成 API",
+			Label:      "云端图像正交投影 (B2-v2)",
 			Configured: cfg.ImageApiURL != "" && (cfg.ImageApiKey != "" || isLoopbackURL(cfg.ImageApiURL) || cfg.AllowPrivateWorker),
-			Hint:       "对接 OpenAI Images 兼容接口，经 UV 掩码清洗与覆盖度校验后输出",
+			Hint:       "生成正交前后双视图后确定性投影并量化为 36 色 64×64 像素皮肤，适合二次元与复杂花纹",
 		},
 		{
 			ID:         engineAsyncWorker,
@@ -354,13 +367,14 @@ func routePostGenerate(ctx context.Context, cfg aiConfig, req sdk.RuntimeRequest
 		return errResp(401, "请先登录后使用 AI 皮肤工坊")
 	}
 	var body struct {
-		Prompt               string      `json:"prompt"`
-		Engine               string      `json:"engine"`
-		Model                string      `json:"model"`
-		Style                string      `json:"style"`
-		BaseRecipe           *SkinRecipe `json:"baseRecipe"`
-		BaseJobID            string      `json:"baseJobId"`
-		ReferenceImageBase64 string      `json:"referenceImageBase64"`
+		Prompt               string         `json:"prompt"`
+		Engine               string         `json:"engine"`
+		Model                string         `json:"model"`
+		Style                string         `json:"style"`
+		BaseRecipe           *SkinRecipe    `json:"baseRecipe"`
+		BasePixelSpec        *SkinPixelSpec `json:"basePixelSpec"`
+		BaseJobID            string         `json:"baseJobId"`
+		ReferenceImageBase64 string         `json:"referenceImageBase64"`
 	}
 	if err := json.Unmarshal(req.Body, &body); err != nil {
 		return errResp(400, "请求参数无效")
@@ -400,6 +414,7 @@ func routePostGenerate(ctx context.Context, cfg aiConfig, req sdk.RuntimeRequest
 	}
 
 	baseRecipe := body.BaseRecipe
+	basePixelSpec := ClonePixelSpec(body.BasePixelSpec)
 	var baseSkin *image.NRGBA
 	baseJobID := strings.TrimSpace(body.BaseJobID)
 	if baseJobID != "" {
@@ -407,22 +422,25 @@ func routePostGenerate(ctx context.Context, cfg aiConfig, req sdk.RuntimeRequest
 		if status != 0 {
 			return errResp(status, errMsg)
 		}
+		if baseRecipe == nil && baseJob.Recipe != nil {
+			rc := *baseJob.Recipe
+			baseRecipe = &rc
+		}
+		if basePixelSpec == nil && baseJob.PixelSpec != nil {
+			basePixelSpec = ClonePixelSpec(baseJob.PixelSpec)
+		}
 		if rawPNG, err := base64.StdEncoding.DecodeString(baseJob.PNGBase64); err == nil {
 			if img, err := skinpng.DecodePNG(rawPNG); err == nil {
 				baseSkin = img
-				if len(refImg) == 0 && (chosen == engineStructuredLLM || chosen == engineLocalDemo) && baseRecipe == nil && baseJob.Recipe == nil {
+				if len(refImg) == 0 && (chosen == engineStructuredLLM || chosen == engineLocalDemo) && baseRecipe == nil && basePixelSpec == nil {
 					if frontPNG, err := skinpng.EncodePNG(skinpng.RenderBodyFront(img, 8, baseJob.Model == "slim", true)); err == nil {
 						refImg = frontPNG
 					}
 				}
 			}
 		}
-		if baseRecipe == nil && baseJob.Recipe != nil {
-			rc := *baseJob.Recipe
-			baseRecipe = &rc
-		}
-	} else if baseRecipe != nil && chosen != engineStructuredLLM && chosen != engineLocalDemo {
-		return errResp(400, "仅纯文本配方、本地演示引擎或基于历史任务编号支持微调")
+	} else if (baseRecipe != nil || basePixelSpec != nil) && chosen != engineStructuredLLM && chosen != engineLocalDemo {
+		return errResp(400, "仅纯文本引擎、本地演示引擎或基于历史任务编号支持微调")
 	}
 
 	// Pre-check points availability via Host API before claiming quota/lock.
@@ -465,6 +483,7 @@ func routePostGenerate(ctx context.Context, cfg aiConfig, req sdk.RuntimeRequest
 		Style:          strings.TrimSpace(body.Style),
 		Model:          skinModel,
 		BaseRecipe:     baseRecipe,
+		BasePixelSpec:  basePixelSpec,
 		BaseSkin:       baseSkin,
 		ReferenceImage: refImg,
 	}
@@ -556,6 +575,7 @@ func runGenerationWorker(jobID string, cfg aiConfig, in aiGenerateInput) {
 	manager.succeedJob(jobID, aiJobSuccess{
 		Summary:     out.Summary,
 		Recipe:      out.Recipe,
+		PixelSpec:   out.PixelSpec,
 		PNGBase64:   base64.StdEncoding.EncodeToString(skinBytes),
 		FrontBase64: base64.StdEncoding.EncodeToString(frontBytes),
 		BackBase64:  base64.StdEncoding.EncodeToString(backBytes),
@@ -595,6 +615,7 @@ func routeGetHistory(req sdk.RuntimeRequest) sdk.RuntimeResponse {
 			Prompt:    item.Prompt,
 			Summary:   item.Summary,
 			Recipe:    item.Recipe,
+			PixelSpec: item.PixelSpec,
 			PNGBase64: item.PNGBase64,
 			CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339),
 			ExpiresAt: item.ExpiresAt.UTC().Format(time.RFC3339),
@@ -866,6 +887,7 @@ func routeAdminClearLogs() sdk.RuntimeResponse {
 type aiJobSuccess struct {
 	Summary     string
 	Recipe      *SkinRecipe
+	PixelSpec   *SkinPixelSpec
 	PNGBase64   string
 	FrontBase64 string
 	BackBase64  string
@@ -1160,6 +1182,7 @@ func (m *jobManager) succeedJob(jobID string, res aiJobSuccess, dur time.Duratio
 	j.Stage = "皮肤生成与 UV 校验完成"
 	j.Summary = res.Summary
 	j.Recipe = res.Recipe
+	j.PixelSpec = ClonePixelSpec(res.PixelSpec)
 	j.PNGBase64 = res.PNGBase64
 	j.FrontPreviewBase64 = res.FrontBase64
 	j.BackPreviewBase64 = res.BackBase64
@@ -1243,6 +1266,7 @@ func (m *jobManager) getCompletedSkin(jobID string, uid int64, isAdmin bool) (*a
 			Status:    "succeeded",
 			Summary:   item.Summary,
 			Recipe:    item.Recipe,
+			PixelSpec: ClonePixelSpec(item.PixelSpec),
 			PNGBase64: item.PNGBase64,
 		}, "", 0
 	}
@@ -1267,6 +1291,7 @@ func (m *jobManager) recordHistoryLocked(j *aiJob, now time.Time) {
 		Prompt:    j.Prompt,
 		Summary:   j.Summary,
 		Recipe:    recipeCopy,
+		PixelSpec: ClonePixelSpec(j.PixelSpec),
 		PNGBase64: j.PNGBase64,
 		CreatedAt: now,
 		ExpiresAt: now.Add(historyTTL),

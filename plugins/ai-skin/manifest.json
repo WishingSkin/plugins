@@ -26,8 +26,8 @@
         "default": "",
         "description": "当站点配置了多种生成引擎时优先使用的引擎",
         "options": [
-          { "value": "structured_llm", "label": "纯文本 AI 配方合成" },
-          { "value": "image_api", "label": "云端图像生成 API" },
+          { "value": "structured_llm", "label": "纯文本 AI 像素精绘 (D2-Strict)" },
+          { "value": "image_api", "label": "云端图像正交投影 (B2-v2)" },
           { "value": "async_worker", "label": "外部专用算力节点" },
           { "value": "local_demo", "label": "内置本地演示引擎" }
         ]
@@ -48,7 +48,18 @@
         "label": "文本模型名称",
         "type": "text",
         "default": "gpt-4o-mini",
-        "description": "纯文本配方合成所使用的模型标识"
+        "description": "纯文本像素精绘所使用的模型标识（建议推理/多模态模型或 DeepSeek/GPT）"
+      },
+      {
+        "key": "llm_render_mode",
+        "label": "文本引擎生成策略",
+        "type": "text",
+        "default": "pixel_grid",
+        "description": "默认使用 D2-Strict 分面像素网格直绘，也可切回旧版参数配方",
+        "options": [
+          { "value": "pixel_grid", "label": "分面像素网格精绘 (D2-Strict，推荐)" },
+          { "value": "recipe", "label": "结构配方模板合成 (旧版)" }
+        ]
       },
       {
         "key": "image_api_url",
@@ -67,6 +78,17 @@
         "type": "text",
         "default": "gpt-image-1",
         "description": "图像生成接口所使用的模型标识"
+      },
+      {
+        "key": "image_api_mode",
+        "label": "图像引擎投影模式",
+        "type": "text",
+        "default": "ortho_b2",
+        "description": "默认生成正交前后双视图并量化投影，比直出 UV 贴图更稳定",
+        "options": [
+          { "value": "ortho_b2", "label": "正交前后双视图投影 + 36 色量化 (B2-v2，推荐)" },
+          { "value": "direct_uv", "label": "直接生成 64×64 UV 展开图 (仅兼容微调模型)" }
+        ]
       },
       {
         "key": "worker_url",

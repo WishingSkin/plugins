@@ -29,14 +29,16 @@ type aiGenerateInput struct {
 	Style          string
 	Model          string
 	BaseRecipe     *SkinRecipe
+	BasePixelSpec  *SkinPixelSpec
 	BaseSkin       *image.NRGBA
 	ReferenceImage []byte
 }
 
 type aiGenerateOutput struct {
-	Image   *image.NRGBA
-	Recipe  *SkinRecipe
-	Summary string
+	Image     *image.NRGBA
+	Recipe    *SkinRecipe
+	PixelSpec *SkinPixelSpec
+	Summary   string
 }
 
 // newSafeAIClient builds an HTTP client enforcing HTTPS (or loopback HTTP; private LAN IPs allowed only when allowPrivate is true)
@@ -140,6 +142,95 @@ func generateStructuredLLM(ctx context.Context, cfg aiConfig, in aiGenerateInput
 		modelName = "gpt-4o-mini"
 	}
 
+	if cfg.LLMRenderMode == "recipe" || (in.BaseRecipe != nil && in.BasePixelSpec == nil) {
+		return generateStructuredLLMRecipe(ctx, cfg, client, endpoint, modelName, in)
+	}
+	return generateStructuredLLMPixelGrid(ctx, cfg, client, endpoint, modelName, in)
+}
+
+func callStructuredChat(ctx context.Context, cfg aiConfig, client *http.Client, endpoint, modelName string, messages []map[string]any, hasRef bool) (string, error) {
+	doReq := func(useJSONFormat bool) (int, []byte, error) {
+		payload := map[string]any{
+			"model":       modelName,
+			"messages":    messages,
+			"temperature": 0.55,
+		}
+		if useJSONFormat {
+			payload["response_format"] = map[string]string{"type": "json_object"}
+		}
+		rawBody, _ := json.Marshal(payload)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(rawBody))
+		if err != nil {
+			return 0, nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if cfg.LLMApiKey != "" {
+			req.Header.Set("Authorization", "Bearer "+cfg.LLMApiKey)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return 0, nil, errors.New("文本模型请求超时，可在插件设置调高 timeout_seconds 后重试（未扣费）")
+			}
+			return 0, nil, fmt.Errorf("文本模型请求失败: %w", err)
+		}
+		defer resp.Body.Close()
+		bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, maxUpstreamJSONBytes))
+		if readErr != nil {
+			return resp.StatusCode, nil, readErr
+		}
+		return resp.StatusCode, bodyBytes, nil
+	}
+
+	status, bodyBytes, err := doReq(true)
+	if err != nil {
+		return "", err
+	}
+	if status == http.StatusBadRequest && strings.Contains(strings.ToLower(string(bodyBytes)), "response_format") {
+		status, bodyBytes, err = doReq(false)
+		if err != nil {
+			return "", err
+		}
+	}
+	if hasRef && status == http.StatusBadRequest {
+		low := strings.ToLower(string(bodyBytes))
+		if strings.Contains(low, "image") || strings.Contains(low, "vision") || strings.Contains(low, "multimodal") || strings.Contains(low, "content") {
+			return "", errors.New("当前配置的文本模型不支持图片输入，请在后台切换为支持视觉的多模态模型（未扣费）")
+		}
+	}
+	if status < 200 || status >= 300 {
+		return "", fmt.Errorf("文本模型返回 HTTP %d（未扣费）", status)
+	}
+
+	var chatResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(bodyBytes, &chatResp); err != nil || len(chatResp.Choices) == 0 {
+		return "", errors.New("文本模型响应格式无效（未扣费）")
+	}
+	return chatResp.Choices[0].Message.Content, nil
+}
+
+func buildLLMUserContent(userText string, refImage []byte) any {
+	if len(refImage) == 0 {
+		return userText
+	}
+	mime := http.DetectContentType(refImage)
+	if mime != "image/jpeg" {
+		mime = "image/png"
+	}
+	dataURI := "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(refImage)
+	return []map[string]any{
+		{"type": "text", "text": userText},
+		{"type": "image_url", "image_url": map[string]string{"url": dataURI}},
+	}
+}
+
+func generateStructuredLLMRecipe(ctx context.Context, cfg aiConfig, client *http.Client, endpoint, modelName string, in aiGenerateInput) (aiGenerateOutput, error) {
 	systemPrompt := `You are a Minecraft skin character designer. Output ONLY a single valid JSON object (no markdown commentary outside JSON) with keys:
 "summary" (short Chinese description <= 40 chars),
 "model" ("default" or "slim"),
@@ -181,86 +272,15 @@ func generateStructuredLLM(ctx context.Context, cfg aiConfig, in aiGenerateInput
 		userParts = append(userParts, "Refine the existing recipe (keep attributes not changed by the user's new instruction): "+string(encodedBase))
 	}
 
-	userMsgContent := any(strings.Join(userParts, "\n"))
-	if len(in.ReferenceImage) > 0 {
-		mime := http.DetectContentType(in.ReferenceImage)
-		if mime != "image/jpeg" {
-			mime = "image/png"
-		}
-		dataURI := "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(in.ReferenceImage)
-		userMsgContent = []map[string]any{
-			{"type": "text", "text": strings.Join(userParts, "\n")},
-			{"type": "image_url", "image_url": map[string]string{"url": dataURI}},
-		}
+	messages := []map[string]any{
+		{"role": "system", "content": systemPrompt},
+		{"role": "user", "content": buildLLMUserContent(strings.Join(userParts, "\n"), in.ReferenceImage)},
 	}
-
-	callChat := func(useJSONFormat bool) (int, []byte, error) {
-		payload := map[string]any{
-			"model": modelName,
-			"messages": []map[string]any{
-				{"role": "system", "content": systemPrompt},
-				{"role": "user", "content": userMsgContent},
-			},
-			"temperature": 0.65,
-		}
-		if useJSONFormat {
-			payload["response_format"] = map[string]string{"type": "json_object"}
-		}
-		rawBody, _ := json.Marshal(payload)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(rawBody))
-		if err != nil {
-			return 0, nil, err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		if cfg.LLMApiKey != "" {
-			req.Header.Set("Authorization", "Bearer "+cfg.LLMApiKey)
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				return 0, nil, errors.New("文本模型请求超时，可在插件设置调高 timeout_seconds 后重试（未扣费）")
-			}
-			return 0, nil, fmt.Errorf("文本模型请求失败: %w", err)
-		}
-		defer resp.Body.Close()
-		bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, maxUpstreamJSONBytes))
-		if readErr != nil {
-			return resp.StatusCode, nil, readErr
-		}
-		return resp.StatusCode, bodyBytes, nil
-	}
-
-	status, bodyBytes, err := callChat(true)
+	rawContent, err := callStructuredChat(ctx, cfg, client, endpoint, modelName, messages, len(in.ReferenceImage) > 0)
 	if err != nil {
 		return aiGenerateOutput{}, err
 	}
-	if status == http.StatusBadRequest && strings.Contains(strings.ToLower(string(bodyBytes)), "response_format") {
-		status, bodyBytes, err = callChat(false)
-		if err != nil {
-			return aiGenerateOutput{}, err
-		}
-	}
-	if len(in.ReferenceImage) > 0 && status == http.StatusBadRequest {
-		low := strings.ToLower(string(bodyBytes))
-		if strings.Contains(low, "image") || strings.Contains(low, "vision") || strings.Contains(low, "multimodal") || strings.Contains(low, "content") {
-			return aiGenerateOutput{}, errors.New("当前配置的文本模型不支持图片输入，请在后台切换为支持视觉的多模态模型（未扣费）")
-		}
-	}
-	if status < 200 || status >= 300 {
-		return aiGenerateOutput{}, fmt.Errorf("文本模型返回 HTTP %d（未扣费）", status)
-	}
-
-	var chatResp struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.Unmarshal(bodyBytes, &chatResp); err != nil || len(chatResp.Choices) == 0 {
-		return aiGenerateOutput{}, errors.New("文本模型响应格式无效（未扣费）")
-	}
-	jsonText := extractJSONObject(chatResp.Choices[0].Message.Content)
+	jsonText := extractJSONObject(rawContent)
 	if jsonText == "" {
 		return aiGenerateOutput{}, errors.New("文本模型未返回有效 JSON 配方（未扣费）")
 	}
@@ -281,6 +301,133 @@ func generateStructuredLLM(ctx context.Context, cfg aiConfig, in aiGenerateInput
 	}, nil
 }
 
+func generateStructuredLLMPixelGrid(ctx context.Context, cfg aiConfig, client *http.Client, endpoint, modelName string, in aiGenerateInput) (aiGenerateOutput, error) {
+	armW := 4
+	if in.Model == "slim" {
+		armW = 3
+	}
+
+	systemPrompt := fmt.Sprintf(`You are an expert Minecraft pixel-art skin designer. Output ONLY a single valid JSON object (no markdown fences) adhering strictly to the D2-Strict Per-Face Pixel Grid schema.
+Top-level keys:
+- "summary": short Chinese description (<= 40 chars)
+- "model": %q
+- "baseSkinColor": "#RRGGBB" base skin color for opaque fills
+- "mirrorLeftArmFromRight": boolean (true mirrors right_arm/right_sleeve into left_arm/left_sleeve)
+- "mirrorLeftLegFromRight": boolean (true mirrors right_leg/right_pant into left_leg/left_pant)
+- "palette": map of 18-32 single-character symbols (excluding "." and " ") -> "#RRGGBB". Use 4-6 step hue-shifted pixel-art ramps (cooler, darker shadows; warmer, brighter highlights) for hair, skin, clothes, shoes, eyes, and accents.
+- "faces": map of part -> face -> array of strings (exactly W chars per string, H strings total).
+Exact required dimensions (W x H) per face:
+- "head" (and optional "hat"): top 8x8, bottom 8x8, right 8x8, front 8x8, left 8x8, back 8x8
+- "torso" (and optional "jacket"): front 8x12, back 8x12, left 4x12, right 4x12, top 8x4, bottom 8x4
+- "right_arm" / "left_arm" (and optional "right_sleeve" / "left_sleeve"): front %dx12, back %dx12, left 4x12, right 4x12, top %dx4, bottom %dx4
+- "right_leg" / "left_leg" (and optional "right_pant" / "left_pant"): front 4x12, back 4x12, left 4x12, right 4x12, top 4x4, bottom 4x4
+Completeness rules:
+1. Every non-mirrored Base part ("head","torso","right_arm","right_leg", plus "left_arm"/"left_leg" if mirror flag is false) MUST include ALL 6 faces ("top","bottom","right","front","left","back") so limbs are never left bare from behind or the side.
+2. When you want asymmetric details (like a single glove or strap), keep mirror flag true AND provide ONLY the overridden faces in "left_arm"/"left_sleeve"/"left_leg"/"left_pant".
+3. Use "." for transparent pixels in Overlay layers ("hat","jacket","right_sleeve","left_sleeve","right_pant","left_pant"). Always design rich "hat" & "jacket" accents (goggles, hair bangs, headphones, jacket lapels, hood, cape emblem) for crisp 3D depth.
+4. Shade faces cleanly (darker inner/bottom folds, brighter shoulders/hair crown, sclera "N"+iris "E" eyes on row 4 of head.front).
+Concise 8x8 hue-shifted head.front example:
+["OPHHHHPI","PHHJHHGI","OGHHHGPO","MHKKKKHM","MNEKKENM","MKKKKKKM","LKKUKKKL","MLKKKKLM"]`, in.Model, armW, armW, armW, armW)
+
+	userParts := []string{
+		"Character prompt: " + in.Prompt,
+		fmt.Sprintf("Target skin model: %s (arm front/back/top/bottom width = %d px)", in.Model, armW),
+	}
+	if in.Style != "" {
+		userParts = append(userParts, "Art style hint: "+in.Style)
+	}
+	if len(in.ReferenceImage) > 0 {
+		userParts = append(userParts, "Analyze the attached reference image carefully (hair color/style, eye color, jacket/outfit details, footwear, hat accessories) and transcribe them crisply onto all 6 faces of the Minecraft pixel grid.")
+	}
+	if in.BasePixelSpec != nil {
+		baseJSON, _ := json.Marshal(in.BasePixelSpec)
+		userParts = append(userParts, "Refine the existing pixel skin spec below. You may return a partial JSON patch containing ONLY updated palette keys and modified faces (unchanged parts will be preserved), OR a full spec:\n"+string(baseJSON))
+	}
+
+	messages := []map[string]any{
+		{"role": "system", "content": systemPrompt},
+		{"role": "user", "content": buildLLMUserContent(strings.Join(userParts, "\n"), in.ReferenceImage)},
+	}
+	rawContent, err := callStructuredChat(ctx, cfg, client, endpoint, modelName, messages, len(in.ReferenceImage) > 0)
+	if err != nil {
+		return aiGenerateOutput{}, err
+	}
+
+	parseAndRender := func(rawReply string) (*SkinPixelSpec, *SkinRecipe, *image.NRGBA, []string, error) {
+		jsonText := extractJSONObject(rawReply)
+		if jsonText == "" {
+			return nil, nil, nil, []string{"response did not contain a valid JSON object"}, errors.New("文本模型未返回有效 JSON（未扣费）")
+		}
+		var probe struct {
+			Faces      map[string]any `json:"faces"`
+			SkinTone   string         `json:"skinTone"`
+			HairColor  string         `json:"hairColor"`
+			TopPrimary string         `json:"topPrimary"`
+		}
+		_ = json.Unmarshal([]byte(jsonText), &probe)
+		if len(probe.Faces) == 0 && (probe.SkinTone != "" || probe.HairColor != "" || probe.TopPrimary != "") && in.BasePixelSpec == nil {
+			var legacy SkinRecipe
+			if uErr := json.Unmarshal([]byte(jsonText), &legacy); uErr == nil {
+				norm := NormalizeRecipe(legacy, in.Model)
+				return nil, &norm, RenderRecipe(norm), nil, nil
+			}
+		}
+
+		var parsed SkinPixelSpec
+		if uErr := json.Unmarshal([]byte(jsonText), &parsed); uErr != nil {
+			return nil, nil, nil, []string{"invalid JSON structure: " + uErr.Error()}, errors.New("无法解析 AI 返回的像素网格 JSON（未扣费）")
+		}
+		candidate := &parsed
+		if in.BasePixelSpec != nil {
+			candidate = MergePixelSpec(in.BasePixelSpec, &parsed)
+		}
+		norm := NormalizePixelSpec(candidate, in.Model)
+		img, valErrs, valErr := ValidateAndRenderPixelSpec(norm, in.Model == "slim")
+		return norm, nil, img, valErrs, valErr
+	}
+
+	norm, legacyRecipe, img, valErrs, valErr := parseAndRender(rawContent)
+	if valErr != nil && len(valErrs) > 0 {
+		// One automatic repair turn when schema/dimensions or completeness checks fail.
+		repairMsg := fmt.Sprintf("Your JSON failed D2-Strict validation with these exact errors:\n- %s\nFix EVERY listed issue (fill any missing base faces and match exact WxH dimensions for %s model armW=%d, keeping all palette symbols defined) and output ONLY the corrected valid JSON object.", strings.Join(valErrs, "\n- "), in.Model, armW)
+		repairMessages := append(messages,
+			map[string]any{"role": "assistant", "content": rawContent},
+			map[string]any{"role": "user", "content": repairMsg},
+		)
+		if repairedReply, rErr := callStructuredChat(ctx, cfg, client, endpoint, modelName, repairMessages, false); rErr == nil {
+			norm2, leg2, img2, _, valErr2 := parseAndRender(repairedReply)
+			if valErr2 == nil && img2 != nil {
+				norm, legacyRecipe, img, valErr = norm2, leg2, img2, nil
+			} else if valErr2 != nil {
+				valErr = valErr2
+			}
+		}
+	}
+
+	if valErr != nil || img == nil {
+		if valErr != nil {
+			return aiGenerateOutput{}, fmt.Errorf("像素网格校验未通过: %s（未扣费）", truncateRunes(valErr.Error(), 90))
+		}
+		return aiGenerateOutput{}, errors.New("未能渲染有效的 64×64 像素皮肤（未扣费）")
+	}
+
+	if legacyRecipe != nil {
+		return aiGenerateOutput{
+			Image:   img,
+			Recipe:  legacyRecipe,
+			Summary: legacyRecipe.Summary,
+		}, nil
+	}
+	if norm.Summary == "" {
+		norm.Summary = "AI 像素精绘：" + truncateRunes(in.Prompt, 32)
+	}
+	return aiGenerateOutput{
+		Image:     img,
+		PixelSpec: norm,
+		Summary:   norm.Summary,
+	}, nil
+}
+
 func generateImageAPI(ctx context.Context, cfg aiConfig, in aiGenerateInput) (aiGenerateOutput, error) {
 	endpoint := normalizeEndpointURL(cfg.ImageApiURL, "/v1/images/generations", "/images/generations")
 	useEdits := strings.HasSuffix(strings.TrimRight(endpoint, "/"), "/edits") || in.BaseSkin != nil || len(in.ReferenceImage) > 0
@@ -298,11 +445,27 @@ func generateImageAPI(ctx context.Context, cfg aiConfig, in aiGenerateInput) (ai
 		modelName = "gpt-image-1"
 	}
 
-	fullPrompt := fmt.Sprintf("64x64 pixel-art Minecraft skin texture UV unwrap sheet, flat front-projected UV texture atlas (head at top-left 8x8, torso below, arms and legs on standard Minecraft skin 1:1 grid), crisp unaliased pixels, %s skin model, character: %s", in.Model, in.Prompt)
-	if in.BaseSkin != nil {
-		fullPrompt = fmt.Sprintf("Refine the attached existing Minecraft skin UV texture sheet while strictly keeping every UV region aligned in exact 64x64 grid proportions (%s model). Requested changes: %s", in.Model, in.Prompt)
-	} else if len(in.ReferenceImage) > 0 {
-		fullPrompt = fmt.Sprintf("Convert the attached character reference image into a standard flat 64x64 Minecraft skin UV texture atlas (%s model), crisp pixel art matching UV layout: %s", in.Model, in.Prompt)
+	isDirectUV := cfg.ImageAPIMode == "direct_uv"
+	armSpec := "classic 4px arms"
+	if in.Model == "slim" {
+		armSpec = "slim 3px arms"
+	}
+
+	var fullPrompt string
+	if isDirectUV {
+		fullPrompt = fmt.Sprintf("64x64 pixel-art Minecraft skin texture UV unwrap sheet, flat front-projected UV texture atlas (head at top-left 8x8, torso below, arms and legs on standard Minecraft skin 1:1 grid), crisp unaliased pixels, %s skin model, character: %s", in.Model, in.Prompt)
+		if in.BaseSkin != nil {
+			fullPrompt = fmt.Sprintf("Refine the attached existing Minecraft skin UV texture sheet while strictly keeping every UV region aligned in exact 64x64 grid proportions (%s model). Requested changes: %s", in.Model, in.Prompt)
+		} else if len(in.ReferenceImage) > 0 {
+			fullPrompt = fmt.Sprintf("Convert the attached character reference image into a standard flat 64x64 Minecraft skin UV texture atlas (%s model), crisp pixel art matching UV layout: %s", in.Model, in.Prompt)
+		}
+	} else {
+		fullPrompt = fmt.Sprintf("Crisp flat orthographic 2D pixel-art Minecraft character turnaround sheet on pure solid bright green #00FF00 background. Left half: full-body strictly front view; right half: full-body strictly back view. Blocky Minecraft proportions (head:torso:legs = 8:12:12), %s hanging straight vertically down at sides, hard pixelated nearest-neighbor edges, flat even lighting, no 3D perspective, no shadows, no floor, character: %s", armSpec, in.Prompt)
+		if in.BaseSkin != nil {
+			fullPrompt = fmt.Sprintf("Edit the attached Minecraft front+back orthographic turnaround sheet while strictly keeping blocky 8:12:12 front-left and back-right silhouettes, %s, and pure solid #00FF00 background intact. Requested edits: %s", armSpec, in.Prompt)
+		} else if len(in.ReferenceImage) > 0 {
+			fullPrompt = fmt.Sprintf("Convert the attached reference character into a flat orthographic 2D pixel-art Minecraft turnaround sheet (left half front view, right half back view) on pure solid #00FF00 background, blocky 8:12:12 proportions, %s, crisp unaliased pixels: %s", armSpec, in.Prompt)
+		}
 	}
 	if in.Style != "" {
 		fullPrompt += ", style: " + in.Style
@@ -319,8 +482,13 @@ func generateImageAPI(ctx context.Context, cfg aiConfig, in aiGenerateInput) (ai
 		imgPayload := BuildUVGuidePNG(in.Model == "slim")
 		imgName := "uv-guide.png"
 		if in.BaseSkin != nil {
-			imgPayload = UpscaleSkinForEditPNG(in.BaseSkin)
-			imgName = "base-skin.png"
+			if isDirectUV {
+				imgPayload = UpscaleSkinForEditPNG(in.BaseSkin)
+				imgName = "base-skin.png"
+			} else {
+				imgPayload = RenderOrthoTurnaroundSheet(in.BaseSkin, in.Model == "slim")
+				imgName = "base-turnaround.png"
+			}
 		} else if len(in.ReferenceImage) > 0 {
 			imgPayload = in.ReferenceImage
 			imgName = "reference.png"
@@ -362,7 +530,7 @@ func generateImageAPI(ctx context.Context, cfg aiConfig, in aiGenerateInput) (ai
 	resp, err := client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return aiGenerateOutput{}, errors.New("图像接口生成超时（可在插件设置调高 timeout_seconds 或改用配方合成，未扣费）")
+			return aiGenerateOutput{}, errors.New("图像接口生成超时（可在插件设置调高 timeout_seconds 或改用文本精绘，未扣费）")
 		}
 		return aiGenerateOutput{}, fmt.Errorf("图像接口请求失败: %w", err)
 	}
@@ -423,8 +591,19 @@ func generateImageAPI(ctx context.Context, cfg aiConfig, in aiGenerateInput) (ai
 	if err != nil {
 		return aiGenerateOutput{}, errors.New("无法解码上游返回的图片格式（未扣费）")
 	}
+	nrgba := skinpng.ToNRGBA(decoded)
+	if !isDirectUV && LooksLikeOrthoTurnaround(nrgba) {
+		projected, projErr := ProjectOrthoTurnaroundToSkin(nrgba, in.Model == "slim", 36)
+		if projErr != nil {
+			return aiGenerateOutput{}, projErr
+		}
+		return aiGenerateOutput{
+			Image:   projected,
+			Summary: "正交投影生成：" + truncateRunes(in.Prompt, 32),
+		}, nil
+	}
 	return aiGenerateOutput{
-		Image:   skinpng.ToNRGBA(decoded),
+		Image:   nrgba,
 		Summary: "图像模型生成：" + truncateRunes(in.Prompt, 36),
 	}, nil
 }
@@ -471,15 +650,30 @@ func generateAsyncWorker(ctx context.Context, cfg aiConfig, in aiGenerateInput) 
 		return aiGenerateOutput{}, fmt.Errorf("外部推理节点返回 HTTP %d（未扣费）", resp.StatusCode)
 	}
 
+	finishWorkerImage := func(img image.Image, layout string) (aiGenerateOutput, error) {
+		nrgba := skinpng.ToNRGBA(img)
+		if strings.EqualFold(strings.TrimSpace(layout), "ortho_b2") {
+			projected, projErr := ProjectOrthoTurnaroundToSkin(nrgba, in.Model == "slim", 36)
+			if projErr != nil {
+				return aiGenerateOutput{}, projErr
+			}
+			return aiGenerateOutput{
+				Image:   projected,
+				Summary: "外部节点正交生成：" + truncateRunes(in.Prompt, 32),
+			}, nil
+		}
+		return aiGenerateOutput{
+			Image:   nrgba,
+			Summary: "外部节点生成：" + truncateRunes(in.Prompt, 36),
+		}, nil
+	}
+
 	if strings.HasPrefix(strings.ToLower(resp.Header.Get("Content-Type")), "image/") {
 		decoded, _, err := image.Decode(bytes.NewReader(bodyBytes))
 		if err != nil {
 			return aiGenerateOutput{}, errors.New("无法解析推理节点返回的图像（未扣费）")
 		}
-		return aiGenerateOutput{
-			Image:   skinpng.ToNRGBA(decoded),
-			Summary: "外部节点生成：" + truncateRunes(in.Prompt, 36),
-		}, nil
+		return finishWorkerImage(decoded, "")
 	}
 
 	type workerPayload struct {
@@ -488,6 +682,7 @@ func generateAsyncWorker(ctx context.Context, cfg aiConfig, in aiGenerateInput) 
 		PollURL   string `json:"pollUrl"`
 		PNGBase64 string `json:"pngBase64"`
 		ImageURL  string `json:"imageUrl"`
+		Layout    string `json:"layout"`
 		Error     string `json:"error"`
 	}
 	var wp workerPayload
@@ -514,10 +709,7 @@ func generateAsyncWorker(ctx context.Context, cfg aiConfig, in aiGenerateInput) 
 			if err != nil {
 				return aiGenerateOutput{}, errors.New("无法解码推理节点返回图像（未扣费）")
 			}
-			return aiGenerateOutput{
-				Image:   skinpng.ToNRGBA(decoded),
-				Summary: "外部节点生成：" + truncateRunes(in.Prompt, 36),
-			}, nil
+			return finishWorkerImage(decoded, wp.Layout)
 		}
 		if imgURL := strings.TrimSpace(wp.ImageURL); imgURL != "" {
 			imgClient, err := newSafeAIClient(imgURL, cfg.AllowPrivateWorker, cfg.Timeout)
@@ -544,10 +736,7 @@ func generateAsyncWorker(ctx context.Context, cfg aiConfig, in aiGenerateInput) 
 			if err != nil {
 				return aiGenerateOutput{}, errors.New("无法解码推理节点图片（未扣费）")
 			}
-			return aiGenerateOutput{
-				Image:   skinpng.ToNRGBA(decoded),
-				Summary: "外部节点生成：" + truncateRunes(in.Prompt, 36),
-			}, nil
+			return finishWorkerImage(decoded, wp.Layout)
 		}
 
 		if status != "queued" && status != "running" && status != "processing" && status != "starting" {
@@ -594,10 +783,7 @@ func generateAsyncWorker(ctx context.Context, cfg aiConfig, in aiGenerateInput) 
 			if err != nil {
 				return aiGenerateOutput{}, errors.New("无法解析轮询返回的图像（未扣费）")
 			}
-			return aiGenerateOutput{
-				Image:   skinpng.ToNRGBA(decoded),
-				Summary: "外部节点生成：" + truncateRunes(in.Prompt, 36),
-			}, nil
+			return finishWorkerImage(decoded, wp.Layout)
 		}
 		wp = workerPayload{}
 		if err := json.Unmarshal(pBytes, &wp); err != nil {
