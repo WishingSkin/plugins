@@ -15,6 +15,13 @@
       "sha256": "0c4bf61cde7396108c992af5a59a6aec886a63d4682acebaeae4141f3b0f790d"
     },
     {
+      "id": "wishingskin.server-sync",
+      "name": "社群与游戏服务器联动",
+      "version": "0.1.0",
+      "url": "https://github.com/WishingSkin/plugins/releases/download/server-sync-v0.1.0/wishingskin.server-sync-0.1.0.zip",
+      "sha256": "32ce4ecf117acec34a1341f602909b3a77c58132cc07eb1f40ed1fbf627274ea"
+    },
+    {
       "id": "wishingskin.skin-editor",
       "name": "在线皮肤编辑器",
       "version": "0.1.0",
