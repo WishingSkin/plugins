@@ -12,7 +12,7 @@
 
 提交 PR 前请在仓库根目录执行以下检查：
 
-```powershell
+```bash
 # 1. Go 静态检查与全仓单元测试
 go vet ./...
 go test -count=1 ./...

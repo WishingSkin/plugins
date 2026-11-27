@@ -23,7 +23,7 @@
 
 ## 独立开发与构建
 
-```powershell
+```bash
 go test -count=1 ./plugins/skin-editor/...
 go run ./tools/pack pack -dir plugins/skin-editor -out dist
 ```

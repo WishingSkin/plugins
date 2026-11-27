@@ -61,7 +61,7 @@ https://wishingskin.github.io/plugins/catalog.json
 
 需要 Go `1.26.11`（见 `go.mod`）：
 
-```powershell
+```bash
 # 运行仓库静态检查与单元测试
 go vet ./...
 go test -count=1 ./...

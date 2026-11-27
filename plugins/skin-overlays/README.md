@@ -40,7 +40,7 @@
 
 ## 独立开发与构建
 
-```powershell
+```bash
 go test -count=1 ./plugins/skin-overlays/...
 go run ./tools/pack pack -dir plugins/skin-overlays -out dist
 ```

@@ -34,7 +34,7 @@
 
 ## 独立开发与构建
 
-```powershell
+```bash
 go test -count=1 ./plugins/server-sync/...
 go run ./tools/pack pack -dir plugins/server-sync -out dist
 ```
