@@ -6,6 +6,13 @@
       "version": "0.1.0",
       "url": "https://github.com/WishingSkin/plugins/releases/download/moderation-v0.1.0/wishingskin.moderation-0.1.0.zip",
       "sha256": "fc6655a13ea48d0a159ba1d33aa74dac65b61f7337c1a97da235aa63bb9d8f38"
+    },
+    {
+      "id": "wishingskin.skin-overlays",
+      "name": "皮肤装扮叠层",
+      "version": "0.1.0",
+      "url": "https://github.com/WishingSkin/plugins/releases/download/skin-overlays-v0.1.0/wishingskin.skin-overlays-0.1.0.zip",
+      "sha256": "6272c23af0469d680adbe6e710463dbae774b68b89ce626d31e03f49c56620fd"
     }
   ]
 }
