@@ -1,0 +1,55 @@
+name: 插件问题反馈 / Plugin Bug Report
+description: 反馈官方插件、插件打包工具或市场目录中的异常行为
+title: "[Plugin Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！若问题属于 WishingSkin 宿主本身（安装弹窗、登录、皮肤库核心接口等），请提交至 [WishingSkin/WishingSkin](https://github.com/WishingSkin/WishingSkin/issues/new/choose)。
+  - type: dropdown
+    id: plugin
+    attributes:
+      label: 所属插件或模块 / Plugin or Component
+      options:
+        - wishingskin.ai-skin (AI 皮肤工坊)
+        - wishingskin.moderation (合规校验与内容审核)
+        - wishingskin.skin-editor (在线皮肤编辑器)
+        - wishingskin.skin-overlays (皮肤装扮叠层)
+        - wishingskin.skin-tools (皮肤格式与调色工具)
+        - wishingskin.render-card (角色渲染与玩家名片)
+        - wishingskin.server-sync (社群与游戏服务器联动)
+        - tools/pack 或 catalog.json (打包工具与市场目录)
+    validations:
+      required: true
+  - type: input
+    id: plugin_version
+    attributes:
+      label: 插件版本 / Plugin Version
+      description: 填写已安装插件版本（例如 0.1.0 或 0.1.0-beta.1）。
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: host_version
+    attributes:
+      label: 宿主 WishingSkin 版本 / Host Version
+      description: 填写运行该插件的 WishingSkin 版本（例如 v0.3.0）。
+      placeholder: v0.3.0
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤与异常现象 / Steps & Behavior
+      description: 详细描述操作路径、输入参数与报错表现。
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志或截图 / Logs & Screenshots
+      description: 贴出插件运行日志或前端控制台报错前，请务必删除 API Key、Webhook Secret 与内网地址等敏感信息。
+    validations:
+      required: false

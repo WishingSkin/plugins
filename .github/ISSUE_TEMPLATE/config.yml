@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 宿主 WishingSkin 问题反馈 / Host Issues
+    url: https://github.com/WishingSkin/WishingSkin/issues/new/choose
+    about: 网站主程序、数据库迁移、登录认证或皮肤渲染核心问题请提交至主仓库
+  - name: 使用交流与提问 / Discussions
+    url: https://github.com/WishingSkin/WishingSkin/discussions
+    about: 插件安装配置与使用交流欢迎前往 Discussions
+  - name: 安全漏洞私密报告 / Security Advisory
+    url: https://github.com/WishingSkin/plugins/security/advisories/new
+    about: 请勿公开披露安全漏洞细节，点击此处私密上报

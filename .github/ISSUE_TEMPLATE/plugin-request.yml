@@ -1,0 +1,35 @@
+name: 插件功能建议 / Plugin Feature Request
+description: 为现有官方插件提出改进建议，或提议新的官方插件方向
+title: "[Plugin Feature]: "
+labels:
+  - enhancement
+body:
+  - type: dropdown
+    id: target
+    attributes:
+      label: 目标插件 / Target Plugin
+      options:
+        - wishingskin.ai-skin (AI 皮肤工坊)
+        - wishingskin.moderation (合规校验与内容审核)
+        - wishingskin.skin-editor (在线皮肤编辑器)
+        - wishingskin.skin-overlays (皮肤装扮叠层)
+        - wishingskin.skin-tools (皮肤格式与调色工具)
+        - wishingskin.render-card (角色渲染与玩家名片)
+        - wishingskin.server-sync (社群与游戏服务器联动)
+        - 新插件提议 / New Plugin Idea
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: 使用场景与痛点 / Use Case & Motivation
+      description: 希望解决什么玩家或站长痛点？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望能力与配置设计 / Proposed Design
+      description: 描述你期望的交互方式、配置项、路由或权限需求。
+    validations:
+      required: true
