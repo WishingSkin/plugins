@@ -8,6 +8,13 @@
       "sha256": "fc6655a13ea48d0a159ba1d33aa74dac65b61f7337c1a97da235aa63bb9d8f38"
     },
     {
+      "id": "wishingskin.render-card",
+      "name": "角色渲染与玩家名片",
+      "version": "0.1.0",
+      "url": "https://github.com/WishingSkin/plugins/releases/download/render-card-v0.1.0/wishingskin.render-card-0.1.0.zip",
+      "sha256": "0c4bf61cde7396108c992af5a59a6aec886a63d4682acebaeae4141f3b0f790d"
+    },
+    {
       "id": "wishingskin.skin-editor",
       "name": "在线皮肤编辑器",
       "version": "0.1.0",
