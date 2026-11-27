@@ -459,7 +459,7 @@
     callHost('downloadFile', {
       filename: rawName + '.png',
       mimeType: 'image/png',
-      dataBase64: lastResult.pngBase64
+      pngBase64: lastResult.pngBase64
     }).catch(() => {});
   });
 
@@ -534,7 +534,9 @@
         ? '已保存并提交审核，审核通过后生效。'
         : (res.body.bound ? '合成成功并已穿戴到所选角色！' : '合成成功并已保存至材质库！');
       callHost('notify', { message: msgEl.textContent, kind: 'success' }).catch(() => {});
-      callHost('notifyMutated', { textures: true, characters: charId > 0 }).catch(() => {});
+      callHost('notifyMutated', {
+        kinds: charId > 0 ? ['textures', 'characters'] : ['textures']
+      }).catch(() => {});
     } catch (err) {
       msgEl.className = 'msg err';
       msgEl.textContent = err.message || '保存失败';

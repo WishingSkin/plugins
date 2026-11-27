@@ -355,7 +355,7 @@
     callHost('downloadFile', {
       filename: rawName + '.png',
       mimeType: 'image/png',
-      dataBase64: lastResult.pngBase64
+      pngBase64: lastResult.pngBase64
     }).catch(() => {});
   });
 
@@ -444,7 +444,9 @@
       msg.className = 'msg ok';
       setDirty(false);
       callHost('notify', { message: msg.textContent, kind: 'success' }).catch(() => {});
-      callHost('notifyMutated', { textures: true, characters: charId > 0 && !pending }).catch(() => {});
+      callHost('notifyMutated', {
+        kinds: charId > 0 && !pending ? ['textures', 'characters'] : ['textures']
+      }).catch(() => {});
     } catch (err) {
       msg.className = 'msg err';
       msg.textContent = (err && err.message) || '保存失败';
