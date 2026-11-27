@@ -1,6 +1,13 @@
 {
   "packages": [
     {
+      "id": "wishingskin.ai-skin",
+      "name": "AI 皮肤工坊（测试版）",
+      "version": "0.1.0-beta.1",
+      "url": "https://github.com/WishingSkin/plugins/releases/download/ai-skin-v0.1.0-beta.1/wishingskin.ai-skin-0.1.0-beta.1.zip",
+      "sha256": "f380f13bace7069cb469fc77e9094a2275d61ed2ae22ec7b9c46dd79b62bf6fd"
+    },
+    {
       "id": "wishingskin.moderation",
       "name": "合规校验与内容审核",
       "version": "0.1.0",
