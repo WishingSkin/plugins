@@ -20,6 +20,13 @@
       "version": "0.1.0",
       "url": "https://github.com/WishingSkin/plugins/releases/download/skin-overlays-v0.1.0/wishingskin.skin-overlays-0.1.0.zip",
       "sha256": "6272c23af0469d680adbe6e710463dbae774b68b89ce626d31e03f49c56620fd"
+    },
+    {
+      "id": "wishingskin.skin-tools",
+      "name": "皮肤格式与调色工具",
+      "version": "0.1.0",
+      "url": "https://github.com/WishingSkin/plugins/releases/download/skin-tools-v0.1.0/wishingskin.skin-tools-0.1.0.zip",
+      "sha256": "a7960ed09f5b94cdcdf39c21de1e121cfd8de869d56177f2ee3b2abdbba3e783"
     }
   ]
 }
