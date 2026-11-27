@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>AI 皮肤工坊</title>
+<title>AI 皮肤工坊（测试版）</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -112,8 +112,8 @@
   <section class="card">
     <div class="meta-bar" style="justify-content:space-between">
       <div>
-        <h2>AI 皮肤工坊</h2>
-        <p class="sub">输入角色设定与穿搭描述，自动生成 64×64 Minecraft 标准皮肤，可查看 3D 实时预览并保存或穿戴。</p>
+        <h2>AI 皮肤工坊 <span class="badge accent">测试版</span></h2>
+        <p class="sub">输入角色设定与穿搭描述，自动生成 64×64 Minecraft 标准皮肤，支持对话微调、送入在线皮肤编辑器精修、3D 实时预览与保存穿戴。</p>
       </div>
       <div id="quota-badges" class="meta-bar"></div>
     </div>
@@ -903,6 +903,7 @@
   document.getElementById('hist-refresh-btn').addEventListener('click', () => void loadHistory());
 
   function init() {
+    window.parent.postMessage({ type: 'wishingskin:ready' }, '*');
     void loadConfig();
     void loadCharacters();
     void loadHistory();

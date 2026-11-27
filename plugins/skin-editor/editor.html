@@ -1201,6 +1201,7 @@
   function init() {
     renderSwatches();
     renderEditorViews();
+    window.parent.postMessage({ type: 'wishingskin:ready' }, '*');
     void initTemplates();
     void initCharacters();
   }

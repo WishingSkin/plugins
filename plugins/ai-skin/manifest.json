@@ -1,9 +1,9 @@
 {
   "manifest": {
     "id": "wishingskin.ai-skin",
-    "name": "AI 皮肤工坊",
-    "description": "通过自然语言描述生成标准 64×64 Minecraft 皮肤，支持纯文本 LLM 配方合成、图像 API 及外部算力节点，含 UV 清洗、配额与积分控制。",
-    "version": "0.1.0",
+    "name": "AI 皮肤工坊（测试版）",
+    "description": "【测试版】通过自然语言描述生成标准 64×64 Minecraft 皮肤，支持纯文本 D2-Strict 像素精绘、云端图像 B2-v2 正交投影及外部算力节点，含 UV 清洗、配额与积分控制。",
+    "version": "0.1.0-beta.1",
     "settingsNamespace": "wishingskin.ai-skin",
     "migrationVersion": 0,
     "permissions": [
@@ -168,8 +168,8 @@
   "userFrontends": [
     {
       "id": "studio",
-      "label": "AI 皮肤工坊",
-      "description": "输入文字描述即可生成标准 64×64 Minecraft 皮肤，支持局部微调、预览、保存与角色穿戴。",
+      "label": "AI 皮肤工坊（测试版）",
+      "description": "【测试版】输入文字描述即可生成标准 64×64 Minecraft 皮肤，支持局部微调、一键送入编辑器精修、预览、保存与角色穿戴。",
       "slot": "user.tools",
       "path": "studio.html"
     }

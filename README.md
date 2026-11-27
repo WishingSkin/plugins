@@ -35,7 +35,7 @@ https://wishingskin.github.io/plugins/catalog.json
 | `plugins/skin-tools` | `wishingskin.skin-tools` | 手臂模型转换、64×32 升级与调色工具 | `v0.1.0` 已实现 |
 | `plugins/render-card` | `wishingskin.render-card` | 头像、全身渲染图与玩家 SVG 名片端点 | `v0.1.0` 已实现 |
 | `plugins/server-sync` | `wishingskin.server-sync` | 外部社群与服务器生态联动 | `v0.1.0` 已实现 |
-| `plugins/ai-skin` | `wishingskin.ai-skin` | AI 皮肤工坊（纯文本 LLM 配方合成、图像 API 与外部推理节点） | `v0.1.0` 已实现 |
+| `plugins/ai-skin` | `wishingskin.ai-skin` | AI 皮肤工坊（纯文本 D2-Strict 精绘、图像 B2-v2 投影与外部推理节点） | `v0.1.0-beta.1` 测试版 |
 
 ## 本地打包与检查
 
